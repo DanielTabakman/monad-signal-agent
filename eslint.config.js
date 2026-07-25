@@ -17,6 +17,16 @@ export default tseslint.config(
     }
   },
   {
+    files: ["web/**/*.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        fetch: "readonly",
+        window: "readonly"
+      }
+    }
+  },
+  {
     ignores: ["dist/**", "coverage/**", "node_modules/**"]
   }
 );
