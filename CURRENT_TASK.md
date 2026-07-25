@@ -2,96 +2,62 @@
 
 ## Status
 
-**COMPLETE - unpaid vertical slice passes tests.**
+**COMPLETE - Monad-paid signal loop passes.**
 
 ## Objective
 
-Bootstrap the repository and implement the smallest unpaid vertical slice of the programmable runtime.
+Implement the smallest paid-signal vertical slice on branch `feat/monad-paid-signal`.
 
-## Required implementation
+Note: GitHub PR #2 was still open when this work began. Remote `main` was at `8a1792b`, and PR #2 head was `a0ffe48`. This branch was created from `main` and fast-forwarded to the PR #2 head so the paid slice could start from the unpaid vertical slice the task depends on.
 
-1. Create a TypeScript project with linting, tests, and type checking.
-2. Implement the generic `Program`, `Tool`, `ToolRegistry`, `ExecutionContext`, and `ExecutionEvent` interfaces.
-3. Implement an `AgentRuntime` that loads one trusted program and records a structured execution trace.
-4. Implement a cached market-data tool.
-5. Implement a deterministic local MSOS signal stub matching the charter schema.
-6. Implement a paper-trading tool.
-7. Implement the `msos-margin-demo` program without Monad payment yet.
-8. Implement a trivial `price-report-smoke-test` program proving the runtime is not hard-coded.
-9. Add tests for both programs and the safety-margin decision.
+## Implemented
 
-## Stop condition
-
-Stop when the unpaid vertical slice passes tests and demonstrates:
-
-```text
-load program
--> call registered tools
--> apply margin rule
--> record paper action
--> emit execution trace
-```
-
-## Explicit exclusions from this task
-
-Do not implement:
-
-- Monad integration
-- x402 or MPP
-- Wallet handling
-- Real market-data integration
-- Real trading
-- LLM planning
-- Dynamic tool discovery
-- Arbitrary program execution
-- Visual polish
-- Deployment
-
-## Evidence required before the next task
-
-- Test command and passing output
-- Type-check command and passing output
-- Example execution trace from both programs
-- File list showing the runtime core contains no demo-specific imports
-- Summary of any deviations from the charter
-
-## Files changed
-
-- `.gitignore`
-- `package.json`
-- `package-lock.json`
-- `tsconfig.json`
-- `eslint.config.js`
-- `src/core/agent-runtime.ts`
-- `src/core/execution-context.ts`
-- `src/core/execution-events.ts`
-- `src/core/index.ts`
-- `src/core/json.ts`
-- `src/core/program.ts`
-- `src/core/tool-registry.ts`
-- `src/core/tool.ts`
-- `src/tools/market-data/cached-market-data-tool.ts`
-- `src/tools/msos-signal/msos-signal-stub-tool.ts`
-- `src/tools/paper-trading/paper-trading-tool.ts`
-- `src/tools/index.ts`
-- `src/programs/msos-margin-demo.ts`
-- `src/programs/price-report-smoke-test.ts`
-- `src/programs/index.ts`
-- `src/demo/run.ts`
-- `src/test/runtime.test.ts`
+1. Added a local payment-gated MSOS HTTP endpoint at `POST /msos/signal`.
+2. Unpaid requests return HTTP 402 with the expected payment requirement.
+3. Added a Monad test-reference payment tool that returns a deterministic, verifiable payment reference and transaction hash.
+4. Updated the MSOS margin demo program to:
+   - request the signal unpaid,
+   - encounter the payment requirement,
+   - compare quoted cost with `maxSignalCostAtomic`,
+   - pay only when within budget,
+   - retry the signal request with the payment reference,
+   - validate the paid signal schema,
+   - apply the existing safety-margin rule,
+   - record the paper action.
+5. Added execution events for:
+   - `payment_required`
+   - `payment_approved`
+   - `payment_rejected`
+   - `payment_submitted`
+   - `payment_verified`
+   - `signal_validation`
+6. Added tests for:
+   - unpaid HTTP payment requirement,
+   - paid happy path,
+   - over-budget stop before payment,
+   - malformed-signal stop before paper execution,
+   - second smoke-test program,
+   - unregistered-tool safe failure,
+   - safety-margin rule.
 
 ## Commands run
 
-- `npm install`
+- `git fetch origin main`
+- `gh pr view 2 --repo DanielTabakman/monad-signal-agent --json number,state,baseRefName,headRefName,mergeCommit,headRefOid,url,title`
+- `git switch main`
+- `git pull --ff-only origin main`
+- `git switch -c feat/monad-paid-signal`
+- `git merge --no-edit origin/feat/unpaid-vertical-slice`
 - `npm run typecheck`
 - `npm run lint`
 - `npm test`
-- `npm run demo`
-- `rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos" src/core`
-- `Get-ChildItem -Recurse src\core -File | Select-Object -ExpandProperty FullName`
 - `npm run build`
+- `npm run demo`
+- `npm run demo`
+- `npm run demo`
+- `rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos|monad" src/core`
 
-## Test results
+## Results
 
 ```text
 > npm run typecheck
@@ -108,14 +74,22 @@ passed
 > vitest run
 
 Test Files  1 passed (1)
-Tests       5 passed (5)
+Tests       8 passed (8)
+
+> npm run build
+> tsc
+
+passed
+
+> npm run demo
+> tsx src/demo/run.ts
+
+passed three consecutive times
 ```
 
-`npm run build` also passed with `tsc`.
+The `/core` boundary scan returned no matches for tool/program imports or demo-specific terms.
 
-## Example output
-
-`npm run demo` completed both programs. Relevant trace summary:
+## Example trace summary
 
 ```json
 {
@@ -128,7 +102,10 @@ Tests       5 passed (5)
       "safetyMargin": 0.05,
       "estimatedEdge": 0.08,
       "action": "BUY",
-      "paperTradeId": "paper-1"
+      "paperTradeId": "paper-1",
+      "paymentReference": "monad-test-ref_17579a2bb38359c36d176131ae856f15",
+      "transactionHash": "0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
+      "verificationUrl": "https://testnet.monad.xyz/tx/0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9"
     },
     "traceTypes": [
       "program_started",
@@ -136,6 +113,15 @@ Tests       5 passed (5)
       "tool_call_succeeded:market-data",
       "tool_call_started:msos-signal",
       "tool_call_succeeded:msos-signal",
+      "payment_required:msos-signal",
+      "payment_approved:monad-payment",
+      "tool_call_started:monad-payment",
+      "tool_call_succeeded:monad-payment",
+      "payment_submitted:monad-payment",
+      "tool_call_started:msos-signal",
+      "tool_call_succeeded:msos-signal",
+      "payment_verified:msos-signal",
+      "signal_validation:msos-signal:true",
       "decision:safety-margin-comparison",
       "tool_call_started:paper-trading",
       "tool_call_succeeded:paper-trading",
@@ -151,44 +137,75 @@ Tests       5 passed (5)
       "price": 182.42,
       "currency": "USD",
       "source": "cached"
-    },
-    "traceTypes": [
-      "program_started",
-      "tool_call_started:market-data",
-      "tool_call_succeeded:market-data",
-      "decision:price-report-created",
-      "program_completed"
-    ]
+    }
   }
 }
 ```
 
-## Core boundary evidence
+## Payment requirement evidence
 
-Runtime core files:
+Unpaid `POST /msos/signal` returns HTTP 402:
 
-```text
-src/core/agent-runtime.ts
-src/core/execution-context.ts
-src/core/execution-events.ts
-src/core/index.ts
-src/core/json.ts
-src/core/program.ts
-src/core/tool-registry.ts
-src/core/tool.ts
+```json
+{
+  "status": "payment_required",
+  "paymentRequirement": {
+    "id": "msos-sol-signal-2026-07-25",
+    "network": "monad-testnet",
+    "protocol": "monad-hackathon-test-reference",
+    "amountAtomic": "10000000000000000",
+    "currency": "MON",
+    "recipient": "0x0000000000000000000000000000000000000abc",
+    "memo": "MSOS SOL signal access",
+    "expiresAt": "2026-07-25T23:59:59.000Z",
+    "verificationMethod": "deterministic-local-testnet-reference"
+  }
+}
 ```
 
-`rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos" src/core` returned no matches, showing the runtime core has no demo-specific imports or terms.
+## Verification evidence
+
+The Monad payment tool returns a deterministic test-reference receipt:
+
+```json
+{
+  "paymentReference": "monad-test-ref_17579a2bb38359c36d176131ae856f15",
+  "network": "monad-testnet",
+  "protocol": "monad-hackathon-test-reference",
+  "amountAtomic": "10000000000000000",
+  "currency": "MON",
+  "transactionHash": "0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
+  "verificationUrl": "https://testnet.monad.xyz/tx/0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
+  "submittedAt": "2026-07-25T00:03:00.000Z"
+}
+```
+
+The MSOS endpoint verifies that reference before returning the paid signal and emits `payment_verified` in the runtime trace.
+
+## Files changed
+
+- `CURRENT_TASK.md`
+- `src/core/agent-runtime.ts`
+- `src/core/execution-context.ts`
+- `src/core/execution-events.ts`
+- `src/demo/run.ts`
+- `src/programs/index.ts`
+- `src/programs/msos-margin-demo.ts`
+- `src/test/runtime.test.ts`
+- `src/tools/index.ts`
+- `src/tools/monad-payment/monad-payment-tool.ts`
+- `src/tools/msos-signal/paid-msos-signal-endpoint.ts`
+- `src/tools/msos-signal/paid-msos-signal-tool.ts`
 
 ## Known limitations
 
-- Monad payment, x402, MPP, wallets, and real payment requirements are intentionally not implemented in this task.
-- Market data is cached-only and contains the single SOL snapshot required by the unpaid demo slice.
-- The MSOS signal is a deterministic local stub matching the charter schema, not a paid analytics service.
-- Paper trading records are in-memory and cannot move real funds.
-- `npm install` completed, but npm reported 5 high-severity dependency audit findings in the dev dependency tree.
-- Deviation from the full charter: payment and live market data are deferred exactly as allowed by `CURRENT_TASK.md`; the unpaid vertical slice is complete.
+- No real trading is implemented; paper trading remains in-memory only.
+- No real funds are used. The payment tool uses a deterministic Monad testnet-style verification reference because no official hackathon environment requiring real funds was configured in this repository.
+- The MSOS HTTP endpoint is a local demo endpoint, not a deployed service.
+- The payment protocol is intentionally limited to the single Monad test-reference path needed for this vertical slice.
+- Market data remains cached-only.
+- The branch includes the unpaid PR #2 head because PR #2 had not actually been merged into remote `main` at implementation time.
 
-## Next task after acceptance
+## Stop condition
 
-Add the Monad payment tool and place the MSOS signal behind a real payment requirement without changing the runtime core.
+Stop here. The Monad-paid signal loop passes; do not begin interface or presentation work automatically.
