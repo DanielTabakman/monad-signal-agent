@@ -59,6 +59,9 @@ export class AgentRuntime {
       },
       recordDecision: (label: string, details: JsonObject): void => {
         pushEvent({ type: "decision", label, details });
+      },
+      recordEvent: (event): void => {
+        pushEvent(event);
       }
     };
 

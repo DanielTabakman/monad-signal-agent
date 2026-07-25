@@ -2,193 +2,152 @@
 
 ## Status
 
-**COMPLETE - unpaid vertical slice passes tests.**
+**COMPLETE - live Monad x402 payment was signed, facilitator-settled on Monad Testnet, independently found through Monad RPC, and the agent completed the paid-signal-to-paper-action loop.**
 
 ## Objective
 
-Bootstrap the repository and implement the smallest unpaid vertical slice of the programmable runtime.
+Work on PR #3 and replace the simulated Monad payment implementation with a real Monad x402 v2 testnet integration while keeping the existing agent runtime, budget logic, signal validation, margin decision, execution events, paper-trading tool, and tests.
 
-## Required implementation
+## Official Monad x402 Configuration
 
-1. Create a TypeScript project with linting, tests, and type checking.
-2. Implement the generic `Program`, `Tool`, `ToolRegistry`, `ExecutionContext`, and `ExecutionEvent` interfaces.
-3. Implement an `AgentRuntime` that loads one trusted program and records a structured execution trace.
-4. Implement a cached market-data tool.
-5. Implement a deterministic local MSOS signal stub matching the charter schema.
-6. Implement a paper-trading tool.
-7. Implement the `msos-margin-demo` program without Monad payment yet.
-8. Implement a trivial `price-report-smoke-test` program proving the runtime is not hard-coded.
-9. Add tests for both programs and the safety-margin decision.
+Implementation authority: https://docs.monad.xyz/guides/x402
 
-## Stop condition
+- Network: `eip155:10143`
+- x402 protocol version: `2`
+- Scheme: `exact`
+- Payment asset: Monad Testnet USDC, `0x534b2f3A21130d7a60830c2Df862319e593943A3`
+- Facilitator: `https://x402-facilitator.molandak.org`
+- Demo quote: `1000` atomic USDC units, equal to `0.001 USDC`
 
-Stop when the unpaid vertical slice passes tests and demonstrates:
+## Implemented
+
+1. Replaced the deterministic Monad test-reference implementation with x402 v2 payment requirements.
+2. Added real EVM exact-payment signing with `@x402/core`, `@x402/evm`, and `viem`.
+3. Added facilitator-backed verification and settlement on the MSOS endpoint.
+4. Kept the agent flow intact:
+   - request MSOS signal without payment,
+   - receive HTTP 402 payment requirement,
+   - compare quote against `maxSignalCostAtomic`,
+   - sign approved payment authorization,
+   - retry paid request,
+   - store facilitator verification and settlement results,
+   - validate the signal,
+   - apply the safety-margin rule,
+   - record the paper action.
+5. Added an explicit `mock` payment mode for unit tests and local demo only.
+6. Added `npm run demo:monad` as the opt-in live integration command.
+7. Added `.env.example` with placeholder-only live configuration names.
+
+## Removed Misleading Simulation
+
+Removed from source code:
+
+- the old hackathon test-reference protocol label
+- the old deterministic local verification label
+- locally fabricated transaction-hash-shaped receipts
+- fabricated Monad explorer URLs
+- verification based only on string shape
+
+Mock mode remains only as `mode: "mock"` and states that it is not verified on Monad. It emits `mock-settlement-not-onchain`, not a Monad explorer URL and not a 64-byte transaction hash.
+
+## Unit-Test Mock Evidence
+
+Command:
 
 ```text
-load program
--> call registered tools
--> apply margin rule
--> record paper action
--> emit execution trace
+npm test
 ```
 
-## Explicit exclusions from this task
-
-Do not implement:
-
-- Monad integration
-- x402 or MPP
-- Wallet handling
-- Real market-data integration
-- Real trading
-- LLM planning
-- Dynamic tool discovery
-- Arbitrary program execution
-- Visual polish
-- Deployment
-
-## Evidence required before the next task
-
-- Test command and passing output
-- Type-check command and passing output
-- Example execution trace from both programs
-- File list showing the runtime core contains no demo-specific imports
-- Summary of any deviations from the charter
-
-## Files changed
-
-- `.gitignore`
-- `package.json`
-- `package-lock.json`
-- `tsconfig.json`
-- `eslint.config.js`
-- `src/core/agent-runtime.ts`
-- `src/core/execution-context.ts`
-- `src/core/execution-events.ts`
-- `src/core/index.ts`
-- `src/core/json.ts`
-- `src/core/program.ts`
-- `src/core/tool-registry.ts`
-- `src/core/tool.ts`
-- `src/tools/market-data/cached-market-data-tool.ts`
-- `src/tools/msos-signal/msos-signal-stub-tool.ts`
-- `src/tools/paper-trading/paper-trading-tool.ts`
-- `src/tools/index.ts`
-- `src/programs/msos-margin-demo.ts`
-- `src/programs/price-report-smoke-test.ts`
-- `src/programs/index.ts`
-- `src/demo/run.ts`
-- `src/test/runtime.test.ts`
-
-## Commands run
-
-- `npm install`
-- `npm run typecheck`
-- `npm run lint`
-- `npm test`
-- `npm run demo`
-- `rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos" src/core`
-- `Get-ChildItem -Recurse src\core -File | Select-Object -ExpandProperty FullName`
-- `npm run build`
-
-## Test results
+Result:
 
 ```text
-> npm run typecheck
-> tsc --noEmit
-
-passed
-
-> npm run lint
-> eslint .
-
-passed
-
-> npm test
-> vitest run
-
 Test Files  1 passed (1)
-Tests       5 passed (5)
+Tests       10 passed (10)
 ```
 
-`npm run build` also passed with `tsc`.
+Covered mock facilitator cases:
 
-## Example output
+- payment required
+- budget rejection
+- verification rejection
+- settlement rejection
+- malformed signal
+- successful paid retry
 
-`npm run demo` completed both programs. Relevant trace summary:
-
-```json
-{
-  "marginDemo": {
-    "programId": "msos-margin-demo",
-    "ok": true,
-    "result": {
-      "market": "crypto",
-      "asset": "SOL",
-      "safetyMargin": 0.05,
-      "estimatedEdge": 0.08,
-      "action": "BUY",
-      "paperTradeId": "paper-1"
-    },
-    "traceTypes": [
-      "program_started",
-      "tool_call_started:market-data",
-      "tool_call_succeeded:market-data",
-      "tool_call_started:msos-signal",
-      "tool_call_succeeded:msos-signal",
-      "decision:safety-margin-comparison",
-      "tool_call_started:paper-trading",
-      "tool_call_succeeded:paper-trading",
-      "program_completed"
-    ]
-  },
-  "priceReport": {
-    "programId": "price-report-smoke-test",
-    "ok": true,
-    "result": {
-      "market": "crypto",
-      "asset": "SOL",
-      "price": 182.42,
-      "currency": "USD",
-      "source": "cached"
-    },
-    "traceTypes": [
-      "program_started",
-      "tool_call_started:market-data",
-      "tool_call_succeeded:market-data",
-      "decision:price-report-created",
-      "program_completed"
-    ]
-  }
-}
-```
-
-## Core boundary evidence
-
-Runtime core files:
+The local mock demo also passed:
 
 ```text
-src/core/agent-runtime.ts
-src/core/execution-context.ts
-src/core/execution-events.ts
-src/core/index.ts
-src/core/json.ts
-src/core/program.ts
-src/core/tool-registry.ts
-src/core/tool.ts
+npm run demo
 ```
 
-`rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos" src/core` returned no matches, showing the runtime core has no demo-specific imports or terms.
+Important mock evidence fields:
 
-## Known limitations
+- `paymentMode: "mock"`
+- `quotedAmountAtomic: "1000"`
+- `settlement.transaction: "mock-settlement-not-onchain"`
+- mock verification note: `not verified on Monad`
+- mock settlement note: `no Monad transaction was sent`
 
-- Monad payment, x402, MPP, wallets, and real payment requirements are intentionally not implemented in this task.
-- Market data is cached-only and contains the single SOL snapshot required by the unpaid demo slice.
-- The MSOS signal is a deterministic local stub matching the charter schema, not a paid analytics service.
-- Paper trading records are in-memory and cannot move real funds.
-- `npm install` completed, but npm reported 5 high-severity dependency audit findings in the dev dependency tree.
-- Deviation from the full charter: payment and live market data are deferred exactly as allowed by `CURRENT_TASK.md`; the unpaid vertical slice is complete.
+## Live Monad Testnet Evidence
 
-## Next task after acceptance
+Command:
 
-Add the Monad payment tool and place the MSOS signal behind a real payment requirement without changing the runtime core.
+```text
+npm run demo:monad
+```
+
+Sanitized result from the latest successful live run:
+
+- Payer: `0xEa69e9862FA78b91CBe821203e92CA56570d097b`
+- Pay-to: `0xC9f7948E9073E75D9292Be10EA70bcf98a498142`
+- Payment: `1000` atomic Monad Testnet USDC (`0.001 USDC`)
+- Network: `eip155:10143`
+- Facilitator verification: successful, `isValid: true`
+- Facilitator settlement: successful
+- Transaction hash: `0xad1b12fcce2351eb5a0e175f57989fc0d72c1db550b9d512cf517a58245d143d`
+- Signal estimated edge: `0.08`
+- Safety margin: `0.05`
+- Final bounded action: paper `BUY`
+
+The payment was genuinely signed and settled on Monad Testnet through the x402 facilitator. The returned transaction was independently found through Monad RPC. The agent completed the full paid-signal-to-paper-action loop. Test MON was not required for this successful facilitator-settled run.
+
+Only sanitized live evidence is recorded here; sensitive local configuration and authorization material are excluded.
+
+## Commands Run
+
+```text
+npm run typecheck
+npm test
+npm run lint
+npm run build
+npm run demo
+npm run demo:monad
+```
+
+Results:
+
+- `npm run typecheck`: passed
+- `npm test`: passed, 10 tests
+- `npm run lint`: passed
+- `npm run build`: passed
+- `npm run demo`: passed with explicit mock evidence
+- `npm run demo:monad`: passed in the latest live run with the sanitized evidence above
+
+## Files Changed
+
+- `.env.example`
+- `CURRENT_TASK.md`
+- `package-lock.json`
+- `package.json`
+- `src/demo/run.ts`
+- `src/demo/run-monad-live.ts`
+- `src/programs/msos-margin-demo.ts`
+- `src/test/runtime.test.ts`
+- `src/tools/index.ts`
+- `src/tools/monad-payment/monad-payment-tool.ts`
+- `src/tools/msos-signal/paid-msos-signal-endpoint.ts`
+- `src/tools/msos-signal/paid-msos-signal-tool.ts`
+
+## Stop Condition
+
+Stop after the real paid-signal flow succeeds. Do not start UI work, live market-data work, additional strategies, real trading, or presentation polish.

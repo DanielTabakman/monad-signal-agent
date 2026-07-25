@@ -35,6 +35,49 @@ export type ExecutionEvent =
       timestamp: string;
     }
   | {
+      type: "payment_required";
+      programId: string;
+      toolName: string;
+      requirement: JsonObject;
+      timestamp: string;
+    }
+  | {
+      type: "payment_approved";
+      programId: string;
+      toolName: string;
+      details: JsonObject;
+      timestamp: string;
+    }
+  | {
+      type: "payment_rejected";
+      programId: string;
+      toolName: string;
+      details: JsonObject;
+      timestamp: string;
+    }
+  | {
+      type: "payment_submitted";
+      programId: string;
+      toolName: string;
+      reference: JsonObject;
+      timestamp: string;
+    }
+  | {
+      type: "payment_verified";
+      programId: string;
+      toolName: string;
+      reference: JsonObject;
+      timestamp: string;
+    }
+  | {
+      type: "signal_validation";
+      programId: string;
+      toolName: string;
+      valid: boolean;
+      details: JsonObject;
+      timestamp: string;
+    }
+  | {
       type: "program_completed";
       programId: string;
       result: JsonValue;

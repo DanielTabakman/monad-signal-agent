@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "demo": "tsx src/demo/run.ts"
+    "demo": "tsx src/demo/run.ts",
+    "setup:monad-wallet": "tsx src/demo/setup-monad-wallet.ts",
+    "demo:monad": "tsx src/demo/run-monad-live.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -18,5 +20,10 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@x402/core": "^2.19.0",
+    "@x402/evm": "^2.19.0",
+    "viem": "^2.55.8"
   }
 }
