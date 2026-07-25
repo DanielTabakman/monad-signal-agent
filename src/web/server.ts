@@ -12,8 +12,10 @@ import { generateProgramSource, parseWebRunRequest, type WebRunRequest } from ".
 const HOST = process.env.HOST ?? "0.0.0.0";
 const PORT = readPositiveInteger(process.env.PORT, 4173);
 const WEB_ROOT = join(process.cwd(), "web");
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const LIVE_RUNS_ENABLED = readBoolean(process.env.PUBLIC_LIVE_RUNS_ENABLED, !IS_PRODUCTION);
+const IS_HOSTED =
+  process.env.NODE_ENV === "production" ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const LIVE_RUNS_ENABLED = readBoolean(process.env.PUBLIC_LIVE_RUNS_ENABLED, !IS_HOSTED);
 const LIVE_RUNS_PER_IP = readPositiveInteger(process.env.LIVE_RUNS_PER_IP, 3);
 const LIVE_RUN_WINDOW_MS = readPositiveInteger(process.env.LIVE_RUN_WINDOW_MS, 30 * 60 * 1000);
 const GLOBAL_LIVE_RUN_LIMIT = readPositiveInteger(process.env.GLOBAL_LIVE_RUN_LIMIT, 50);
@@ -64,7 +66,7 @@ server.listen(PORT, HOST, () => {
   const localAddress = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
   console.log(`\nMonad Signal Agent UI running at http://${localAddress}:${PORT}`);
   console.log(
-    IS_PRODUCTION
+    IS_HOSTED
       ? "Public deployment mode enabled."
       : "Keep this terminal open while presenting. Press Ctrl+C to stop."
   );
@@ -90,7 +92,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       walletConfigured,
       liveRunsEnabled: LIVE_RUNS_ENABLED && walletConfigured,
       livePaymentAmount: "0.001 USDC",
-      deployment: IS_PRODUCTION ? "public" : "local",
+      deployment: IS_HOSTED ? "public" : "local",
       limits: {
         perIp: LIVE_RUNS_PER_IP,
         perIpWindowMinutes: Math.round(LIVE_RUN_WINDOW_MS / 60_000),
@@ -292,7 +294,11 @@ function buildReplayTrace(): Array<Record<string, unknown>> {
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const contentType = request.headers["content-type"] ?? "";
+  const contentTypeHeader = request.headers["content-type"];
+  const contentType = Array.isArray(contentTypeHeader)
+    ? (contentTypeHeader[0] ?? "")
+    : (contentTypeHeader ?? "");
+
   if (!contentType.toLowerCase().startsWith("application/json")) {
     throw new HttpError(415, "Content-Type must be application/json");
   }
