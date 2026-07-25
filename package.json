@@ -14,6 +14,7 @@
     "demo:present": "tsx src/demo/run-monad-presenter.ts",
     "demo:present:three": "tsx src/demo/run-monad-three.ts",
     "demo:replay": "tsx src/demo/run-demo-replay.ts",
+    "demo:web": "tsx src/web/server.ts",
     "demo:accept": "npm run typecheck && npm run lint && npm test && npm run build && npm run demo:replay && npm run demo:present:three"
   },
   "devDependencies": {
