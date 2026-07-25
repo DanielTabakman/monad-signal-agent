@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A programmable financial agent that purchases intelligence through Monad x402 and takes bounded paper actions."
+    />
+    <title>Monad Signal Agent</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <div class="eyebrow">PROGRAMMABLE FINANCIAL AGENT</div>
+          <h1>Monad Signal Agent</h1>
+        </div>
+      </div>
+
+      <div class="network-cluster">
+        <div class="status-pill">
+          <span class="status-dot"></span>
+          Monad Testnet
+        </div>
+        <div id="wallet-status" class="wallet-status">Checking wallet…</div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="panel builder-panel">
+        <div class="panel-heading">
+          <div>
+            <div class="section-number">01</div>
+            <h2>Build the program</h2>
+          </div>
+          <span class="trusted-badge">Trusted runtime</span>
+        </div>
+
+        <p class="panel-copy">
+          Configure a registered program. The controls below change the inputs that the runtime actually executes.
+        </p>
+
+        <div class="control-grid">
+          <label class="field field-wide">
+            <span>Program template</span>
+            <select id="program-id">
+              <option value="msos-margin-demo">MSOS Margin Agent</option>
+              <option value="price-report-smoke-test">Price Report Smoke Test</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Market</span>
+            <select id="market">
+              <option value="crypto">Crypto</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Asset</span>
+            <select id="asset">
+              <option value="SOL">SOL</option>
+            </select>
+          </label>
+
+          <label class="field payment-control">
+            <span>Safety margin</span>
+            <select id="safety-margin">
+              <option value="0.03">3% — easier to act</option>
+              <option value="0.05" selected>5% — default</option>
+              <option value="0.10">10% — forces NO_TRADE</option>
+            </select>
+          </label>
+
+          <label class="field payment-control">
+            <span>Signal budget</span>
+            <select id="signal-budget">
+              <option value="500">0.0005 USDC — reject</option>
+              <option value="1000" selected>0.001 USDC — approve</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="code-card">
+          <div class="code-toolbar">
+            <div>
+              <span class="code-dot red"></span>
+              <span class="code-dot yellow"></span>
+              <span class="code-dot green"></span>
+            </div>
+            <div class="code-label">TRADING PROGRAM</div>
+            <button id="reset-script" class="text-button" type="button">Regenerate</button>
+          </div>
+          <textarea id="program-source" spellcheck="false" aria-label="Generated trading program"></textarea>
+          <div class="code-note">
+            The hackathon runtime executes registered templates only. The dropdowns generate the real bounded configuration;
+            the editor is available for presentation and iteration without enabling arbitrary code execution.
+          </div>
+        </div>
+
+        <div class="builder-footer">
+          <div class="cost-callout payment-control">
+            <span>Live run cost</span>
+            <strong>0.001 test USDC</strong>
+          </div>
+          <div class="button-row">
+            <button id="replay-button" class="button secondary" type="button">Replay verified proof</button>
+            <button id="run-button" class="button primary" type="button">
+              <span>Run agent</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel execution-panel">
+        <div class="panel-heading execution-heading">
+          <div>
+            <div class="section-number">02</div>
+            <h2>Watch it execute</h2>
+          </div>
+          <div id="run-mode" class="run-mode">READY</div>
+        </div>
+
+        <div id="hero-state" class="hero-state">
+          <div class="hero-orbit" aria-hidden="true">
+            <div class="orbit-ring ring-one"></div>
+            <div class="orbit-ring ring-two"></div>
+            <div class="orbit-core">M</div>
+          </div>
+          <div>
+            <div id="hero-kicker" class="hero-kicker">Agent standing by</div>
+            <div id="hero-title" class="hero-title">Configure a program and run it.</div>
+            <div id="hero-subtitle" class="hero-subtitle">
+              The live path signs a payment, settles it through the Monad x402 facilitator, verifies the transaction by RPC,
+              and records a paper action.
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline" aria-label="Execution pipeline">
+          <div class="pipeline-step" data-step="program">
+            <span class="step-index">1</span>
+            <div><strong>Program</strong><small>Load template</small></div>
+          </div>
+          <div class="pipeline-line"></div>
+          <div class="pipeline-step" data-step="market">
+            <span class="step-index">2</span>
+            <div><strong>Market</strong><small>Retrieve SOL</small></div>
+          </div>
+          <div class="pipeline-line"></div>
+          <div class="pipeline-step" data-step="payment">
+            <span class="step-index">3</span>
+            <div><strong>Payment</strong><small>Monad x402</small></div>
+          </div>
+          <div class="pipeline-line"></div>
+          <div class="pipeline-step" data-step="signal">
+            <span class="step-index">4</span>
+            <div><strong>Signal</strong><small>Unlock MSOS</small></div>
+          </div>
+          <div class="pipeline-line"></div>
+          <div class="pipeline-step" data-step="action">
+            <span class="step-index">5</span>
+            <div><strong>Action</strong><small>Paper only</small></div>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card">
+            <span>Market price</span>
+            <strong id="metric-price">—</strong>
+            <small id="metric-source">Waiting for data</small>
+          </article>
+          <article class="metric-card">
+            <span>Paid intelligence</span>
+            <strong id="metric-payment">—</strong>
+            <small id="metric-payment-state">No payment submitted</small>
+          </article>
+          <article class="metric-card">
+            <span>Signal edge</span>
+            <strong id="metric-edge">—</strong>
+            <small id="metric-margin">Waiting for signal</small>
+          </article>
+          <article class="metric-card action-card">
+            <span>Final action</span>
+            <strong id="metric-action">—</strong>
+            <small>Bounded paper execution</small>
+          </article>
+        </div>
+
+        <div id="transaction-card" class="transaction-card hidden">
+          <div>
+            <span class="transaction-label">MONAD TRANSACTION</span>
+            <strong id="transaction-hash">—</strong>
+          </div>
+          <a id="transaction-link" href="#" target="_blank" rel="noreferrer">Open explorer ↗</a>
+        </div>
+
+        <div class="trace-card">
+          <div class="trace-header">
+            <div>
+              <span class="trace-live-dot"></span>
+              EXECUTION TRACE
+            </div>
+            <button id="clear-trace" class="text-button" type="button">Clear</button>
+          </div>
+          <div id="trace-output" class="trace-output" role="log" aria-live="polite">
+            <div class="trace-empty">No events yet. Run the agent to produce an auditable trace.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Registered programs · bounded tools · paper execution only</span>
+      <span>Monad x402 · Network eip155:10143</span>
+    </footer>
+  </body>
+</html>
