@@ -1,195 +1,211 @@
-# Monad Signal Agent — Project Charter v1
+# Monad Signal Agent — Hackathon Charter v1
+
+## Status
+
+**Frozen hackathon scope.**
+
+This document is the source of truth for what will be built during the hackathon. New features are out of scope unless they replace an existing requirement and reduce implementation risk.
 
 ## Mission
 
-Build a programmable market agent that can gather information, purchase specialized analysis through Monad, apply a selected strategy, and produce a simulated trade decision.
+Build a small programmable agent runtime that can load a trusted program, coordinate registered tools, pay for a service through Monad, take a bounded action, and produce a visible execution trace.
 
-The long-term agent is designed to be:
+## Product concept
 
-- information-source agnostic
-- market agnostic
-- asset agnostic
-- strategy agnostic
-- payment-rail adaptable
-- execution-venue adaptable
+The durable product is the runtime, not the demo strategy.
 
-The hackathon demo will prove that architecture with one deliberately narrow configuration.
+```text
+Agent runtime
++ registered tools
++ loaded program
+= specific agent behaviour
+```
 
-## Product thesis
+The runtime must not be hard-coded to a market, asset, information source, trading strategy, or execution venue.
 
-Financial agents should be able to acquire the information and models they need as machine-purchasable services, then use those capabilities inside a governed decision workflow.
+## Meaning of “programmable”
 
-For the demo, the agent purchases an MSOS analysis through Monad, applies a simple strategy, and records a paper trade.
+For this hackathon, programmable means:
 
-## Frozen demo configuration
+- The runtime loads a trusted TypeScript program module implementing a defined interface.
+- The program receives a constrained execution context and may call registered tools.
+- The program determines the sequence of actions.
+- The runtime records every tool call, result, decision, and final action.
 
-- Information source: one predefined market-data adapter
-- Market: crypto spot
-- Asset: SOL/USD
-- Paid analysis tool: one MSOS signal endpoint
-- Payment: Monad-compatible x402 payment flow
-- Strategy: one deterministic MSOS-based strategy
-- Execution: simulated paper trade only
-- Interface: one visible end-to-end run trace
+Programmable does **not** mean executing arbitrary uploaded code, creating a new programming language, or safely sandboxing unknown programs.
 
-The architecture may be generic. The implemented demo path must remain singular.
+## Runtime capabilities
 
-## Programmability model
+The runtime provides:
 
-A run is described by configuration rather than hard-coded orchestration:
+1. A program interface.
+2. A tool interface and registry.
+3. A typed execution context.
+4. Budget and action limits.
+5. Structured execution events.
+6. A final result.
+7. Failure handling that stops safely.
+
+## Hackathon demonstration program
+
+The loaded demo program performs this fixed workflow:
+
+```text
+Retrieve SOL market data
+→ purchase an MSOS signal through Monad
+→ compare the signal edge with a configured safety margin
+→ record a paper trade or abstain
+→ return a structured result and execution trace
+```
+
+### Demo configuration
+
+- Market: crypto
+- Asset: SOL
+- Information source: one predefined live source with a cached fallback
+- Paid intelligence: one MSOS signal endpoint
+- Payment rail: Monad
+- Strategy rule: act only when the signal clears a configured margin
+- Execution: paper trading only
+
+The SOL, MSOS, and strategy details belong in the demo program and tools, not in the runtime core.
+
+## Reusable architecture
+
+```text
+/core
+  agent-runtime
+  program-interface
+  tool-interface
+  tool-registry
+  execution-context
+  execution-events
+
+/tools
+  market-data
+  msos-signal
+  monad-payment
+  paper-trading
+
+/programs
+  msos-margin-demo
+  price-report-smoke-test
+
+/web
+  execution-trace-demo
+```
+
+## Architecture boundaries
+
+1. `/core` must not import a specific market, asset, strategy, blockchain, or UI.
+2. Programs may coordinate tools but may not bypass runtime limits.
+3. Payment logic belongs in a tool or adapter, not in the runtime.
+4. Trading execution is paper-only for the hackathon.
+5. The analytics service must remain callable independently of the agent runtime.
+6. The demo must remain runnable with cached market data if the live source fails.
+
+## Required tool contracts
+
+### Market data tool
+
+Returns a typed market snapshot for a requested market and asset.
+
+### MSOS signal tool
+
+Returns a structured signal containing at minimum:
 
 ```json
 {
-  "market": { "type": "spot", "symbol": "SOL/USD" },
-  "sources": ["demo-market-data"],
-  "analysisTools": ["msos-signal"],
-  "strategy": "msos-threshold-v1",
-  "executionVenue": "paper",
-  "paymentRail": "monad-x402",
-  "budget": { "maxSpend": "0.10", "currency": "USDC" }
-}
-```
-
-Only the listed demo adapters must work during the hackathon. Additional adapters are future extensions, not current deliverables.
-
-## Core interfaces
-
-### InformationSource
-
-Retrieves normalized evidence for a market request.
-
-```ts
-interface InformationSource {
-  id: string;
-  fetch(request: MarketRequest): Promise<Evidence[]>;
-}
-```
-
-### AnalysisTool
-
-Quotes and returns specialized analysis. A tool may be free or payment-gated.
-
-```ts
-interface AnalysisTool {
-  id: string;
-  quote(input: AnalysisRequest): Promise<ToolQuote>;
-  invoke(input: AnalysisRequest, payment?: PaymentReceipt): Promise<AnalysisResult>;
-}
-```
-
-### Strategy
-
-Transforms normalized evidence and analysis into a governed decision.
-
-```ts
-interface Strategy {
-  id: string;
-  evaluate(context: DecisionContext): Promise<TradeDecision>;
-}
-```
-
-### PaymentRail
-
-Pays for a quoted machine service within configured limits.
-
-```ts
-interface PaymentRail {
-  id: string;
-  pay(requirement: PaymentRequirement): Promise<PaymentReceipt>;
-}
-```
-
-### ExecutionVenue
-
-Executes or simulates a normalized order.
-
-```ts
-interface ExecutionVenue {
-  id: string;
-  execute(order: OrderIntent): Promise<ExecutionReceipt>;
-}
-```
-
-## Agent responsibilities
-
-The agent may:
-
-1. Load a bounded run configuration.
-2. Request evidence from configured sources.
-3. Request a quote from configured analysis tools.
-4. Pay only when the quote is within policy and budget.
-5. Validate returned analysis.
-6. apply the configured strategy.
-7. Submit the resulting order intent to the configured execution venue.
-8. Produce an auditable run trace.
-
-The agent may not invent new providers, assets, strategies, or execution venues during the hackathon demo.
-
-## Initial MSOS strategy
-
-The first strategy consumes a structured MSOS signal:
-
-```json
-{
+  "market": "crypto",
   "asset": "SOL",
   "decision": "BUY",
   "confidence": 0.68,
+  "estimatedEdge": 0.08,
   "referencePrice": 0,
   "reasons": [],
   "generatedAt": ""
 }
 ```
 
-A configurable threshold converts the signal into `BUY`, `SELL`, or `NO_TRADE`. The strategy must remain deterministic and testable.
+### Monad payment tool
 
-## Commercial margin assumption
+Handles the payment required to access the MSOS signal and returns a verifiable payment reference.
 
-For the MVP, “margin” means an optional configurable markup charged for the MSOS analysis above its underlying data and compute cost. It does not mean leveraged trading. Leveraged execution is out of scope.
+### Paper trading tool
 
-## Architecture rule
+Records `BUY`, `SELL`, or `NO_TRADE` without moving real funds.
 
-Domain code must not depend on Monad, x402, wallets, UI frameworks, or a specific market-data vendor.
+## Program rule
 
-```text
-/core        Domain types, policies, orchestration, validation
-/adapters    Sources, tools, payments, strategies, execution
-/api         Paid and unpaid HTTP interfaces
-/agent       Config loader and run coordinator
-/web         Demo interface
-/tests       Contract and end-to-end tests
-```
-
-Dependencies point inward toward `/core`.
-
-## Required demo flow
+The demo program trades only when:
 
 ```text
-User starts configured run
-→ agent fetches SOL market data
-→ agent calls the paid MSOS tool
-→ tool returns payment requirement
-→ agent pays through Monad
-→ MSOS analysis is returned
-→ configured strategy produces a decision
-→ paper venue records the trade or no-trade
-→ interface displays the complete trace
+estimated edge >= configured safety margin
 ```
 
-## Non-goals
+Otherwise it records `NO_TRADE`.
+
+This is a demonstration rule, not a claim of profitable strategy performance.
+
+## Scope included
+
+- One generic runtime
+- One trusted program interface
+- One tool interface and registry
+- One execution trace
+- One market-data tool
+- One paid MSOS signal tool
+- One Monad payment path
+- One paper-trading tool
+- One complete MSOS margin demo program
+- One trivial second program proving behaviour is replaceable
+- One minimal demo screen or command-line trace
+- Tests for the runtime and demo happy path
+
+## Explicit non-goals
 
 The hackathon build will not include:
 
-- real-money trading
-- leverage or margin trading
-- autonomous internet-wide tool discovery
-- multiple working sources, markets, assets, strategies, or venues
-- portfolio construction
-- position monitoring
-- profitability claims
-- a general agent marketplace
-- production custody or production security
-- a complete MSOS application
+- Arbitrary user-written code execution
+- Code sandboxing
+- A custom programming language
+- A visual workflow builder
+- Dynamic internet-wide tool discovery
+- Autonomous strategy generation
+- Multiple fully implemented strategies
+- Multiple production market integrations
+- Real-money trading
+- DEX or centralized-exchange execution
+- Portfolio management
+- Position monitoring
+- Production custody
+- Production security hardening
+- A general agent marketplace
+- A full MSOS application
+- Claims of profitability
+
+## Reuse after the hackathon
+
+The same runtime can later load programs for:
+
+- Prediction-market question generation and validation
+- Market-vs-model disagreement analysis
+- NDAX or cross-exchange arbitrage detection
+- Backtest purchasing and evaluation
+- Options-expression ranking
+- Forward-consistency analysis
+- Hummingbot execution workflows
+
+These are future programs, not hackathon requirements.
+
+## Scope test
+
+Before adding any feature, ask:
+
+> Is this required to run the single MSOS demo program through the generic runtime interface?
+
+If not, defer it.
 
 ## Success statement
 
-“We built a programmable financial agent that can purchase specialized market intelligence through Monad and use it inside a governed trading workflow.”
+> We built a programmable financial agent that can load a strategy program, purchase specialized intelligence through Monad, and take a bounded action with a complete execution trace.
