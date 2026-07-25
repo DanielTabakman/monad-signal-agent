@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
+    "start": "node dist/web/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -14,6 +18,8 @@
     "demo:present": "tsx src/demo/run-monad-presenter.ts",
     "demo:present:three": "tsx src/demo/run-monad-three.ts",
     "demo:replay": "tsx src/demo/run-demo-replay.ts",
+    "demo:web": "tsx src/web/server.ts",
+    "demo:web:accept": "npm run typecheck && npm run lint && npm test && npm run build && node --check web/app.js",
     "demo:accept": "npm run typecheck && npm run lint && npm test && npm run build && npm run demo:replay && npm run demo:present:three"
   },
   "devDependencies": {

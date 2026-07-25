@@ -14,10 +14,18 @@ import {
 } from "../tools/index.js";
 import { loadEnvLocal } from "./load-env-local.js";
 
-export async function runLiveMonadDemo() {
+export interface LiveMonadDemoOptions {
+  market?: "crypto";
+  asset?: "SOL";
+  safetyMargin?: number;
+  maxSignalCostAtomic?: string;
+}
+
+export async function runLiveMonadDemo(options: LiveMonadDemoOptions = {}) {
   await loadEnvLocal();
 
   const env = readLiveEnv();
+  const config = resolveDemoConfig(options, env.maxSignalCostAtomic);
   const payer = privateKeyToAccount(env.payerPrivateKey);
   const msosEndpoint = await startPaidMsosSignalEndpoint({
     payTo: env.payToAddress,
@@ -35,10 +43,10 @@ export async function runLiveMonadDemo() {
 
   try {
     const result = await runtime.run(msosMarginDemoProgram, {
-      market: "crypto",
-      asset: "SOL",
-      safetyMargin: 0.05,
-      maxSignalCostAtomic: env.maxSignalCostAtomic,
+      market: config.market,
+      asset: config.asset,
+      safetyMargin: config.safetyMargin,
+      maxSignalCostAtomic: config.maxSignalCostAtomic,
       payer: payer.address
     });
 
@@ -76,6 +84,35 @@ export async function runLiveMonadDemo() {
   } finally {
     await msosEndpoint.close();
   }
+}
+
+function resolveDemoConfig(
+  options: LiveMonadDemoOptions,
+  environmentBudgetAtomic: string
+): Required<LiveMonadDemoOptions> {
+  const safetyMargin = options.safetyMargin ?? 0.05;
+  const maxSignalCostAtomic = options.maxSignalCostAtomic ?? environmentBudgetAtomic;
+
+  if (!Number.isFinite(safetyMargin) || safetyMargin < 0 || safetyMargin > 1) {
+    throw new Error("Live demo safety margin must be between 0 and 1");
+  }
+
+  if (!/^\d+$/.test(maxSignalCostAtomic)) {
+    throw new Error("Live demo signal budget must be an integer USDC atomic-unit string");
+  }
+
+  if (BigInt(maxSignalCostAtomic) > BigInt(environmentBudgetAtomic)) {
+    throw new Error(
+      `Live demo signal budget ${maxSignalCostAtomic} exceeds the local safety cap ${environmentBudgetAtomic}`
+    );
+  }
+
+  return {
+    market: options.market ?? "crypto",
+    asset: options.asset ?? "SOL",
+    safetyMargin,
+    maxSignalCostAtomic
+  };
 }
 
 function readLiveEnv(): {
