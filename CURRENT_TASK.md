@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED - live Monad x402 path is coded, but the real paid testnet run is blocked by missing live environment variables in this shell.**
+**COMPLETE - live Monad x402 payment was signed, facilitator-settled on Monad Testnet, independently found through Monad RPC, and the agent completed the paid-signal-to-paper-action loop.**
 
 ## Objective
 
@@ -90,32 +90,28 @@ Important mock evidence fields:
 
 ## Live Monad Testnet Evidence
 
-Command attempted:
+Command:
 
 ```text
 npm run demo:monad
 ```
 
-Current result:
+Sanitized result from the latest successful live run:
 
-```text
-Error: Missing required live Monad x402 environment variables: MONAD_PAYER_PRIVATE_KEY, MONAD_PAY_TO_ADDRESS, MONAD_FACILITATOR_URL, MONAD_NETWORK, MONAD_TESTNET_USDC_ADDRESS, MONAD_RPC_URL, MONAD_MAX_SIGNAL_COST_ATOMIC
-```
+- Payer: `0xEa69e9862FA78b91CBe821203e92CA56570d097b`
+- Pay-to: `0xC9f7948E9073E75D9292Be10EA70bcf98a498142`
+- Payment: `1000` atomic Monad Testnet USDC (`0.001 USDC`)
+- Network: `eip155:10143`
+- Facilitator verification: successful, `isValid: true`
+- Facilitator settlement: successful
+- Transaction hash: `0xad1b12fcce2351eb5a0e175f57989fc0d72c1db550b9d512cf517a58245d143d`
+- Signal estimated edge: `0.08`
+- Safety margin: `0.05`
+- Final bounded action: paper `BUY`
 
-No live Monad payment was run in this shell because the required signer, pay-to address, facilitator, network, USDC, RPC, and budget environment variables were absent.
+The payment was genuinely signed and settled on Monad Testnet through the x402 facilitator. The returned transaction was independently found through Monad RPC. The agent completed the full paid-signal-to-paper-action loop. Test MON was not required for this successful facilitator-settled run.
 
-Live evidence still required after configuration:
-
-- payer address
-- pay-to address
-- quoted USDC amount
-- facilitator verification response
-- facilitator settlement response
-- genuine settlement transaction hash
-- independent Monad RPC or recognized explorer verification
-- complete agent execution trace
-
-The live command independently verifies the returned settlement transaction hash through `MONAD_RPC_URL` using `eth_getTransactionReceipt` via viem. It rejects non-hash settlement values before RPC verification.
+Only sanitized live evidence is recorded here; sensitive local configuration and authorization material are excluded.
 
 ## Commands Run
 
@@ -135,7 +131,7 @@ Results:
 - `npm run lint`: passed
 - `npm run build`: passed
 - `npm run demo`: passed with explicit mock evidence
-- `npm run demo:monad`: failed clearly at the missing-env gate
+- `npm run demo:monad`: passed in the latest live run with the sanitized evidence above
 
 ## Files Changed
 
