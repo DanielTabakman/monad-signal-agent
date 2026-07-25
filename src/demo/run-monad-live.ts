@@ -12,6 +12,9 @@ import {
   createPaperTradingTool,
   startPaidMsosSignalEndpoint
 } from "../tools/index.js";
+import { loadEnvLocal } from "./load-env-local.js";
+
+await loadEnvLocal();
 
 const env = readLiveEnv();
 const payer = privateKeyToAccount(env.payerPrivateKey);
@@ -89,7 +92,9 @@ function readLiveEnv(): {
 
   const missing = required.filter((name) => !process.env[name]);
   if (missing.length > 0) {
-    throw new Error(`Missing required live Monad x402 environment variables: ${missing.join(", ")}`);
+    throw new Error(
+      `Missing required live Monad x402 environment variables: ${missing.join(", ")}. Run npm run setup:monad-wallet first.`
+    );
   }
 
   const payerPrivateKey = process.env.MONAD_PAYER_PRIVATE_KEY!;
