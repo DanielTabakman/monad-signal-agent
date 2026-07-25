@@ -17,6 +17,12 @@ The runtime itself is not tied to SOL, MSOS, a specific market, or a specific st
 ## Demo commands
 
 ```powershell
+npm run demo:accept
+```
+
+Runs typecheck, lint, tests, build, the offline replay, and three consecutive live Monad Testnet proof runs. The live portion spends `0.003` test USDC total.
+
+```powershell
 npm run demo:present
 ```
 
