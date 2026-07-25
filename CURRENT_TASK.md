@@ -1,65 +1,60 @@
-# Current Task — Programmable Unpaid Vertical Slice
+# Current Task
+
+## Status
+
+**READY — implementation has not started.**
 
 ## Objective
 
-Bootstrap the repository and implement the programmable agent core with exactly one working demo configuration, excluding blockchain payment integration for this task.
+Bootstrap the repository and implement the smallest unpaid vertical slice of the programmable runtime.
 
 ## Required implementation
 
-1. Create a TypeScript project with strict type checking, linting, and tests.
-2. Define core domain types for:
-   - `MarketRequest`
-   - `Evidence`
-   - `AnalysisRequest`
-   - `AnalysisResult`
-   - `ToolQuote`
-   - `PaymentRequirement`
-   - `PaymentReceipt`
-   - `DecisionContext`
-   - `TradeDecision`
-   - `OrderIntent`
-   - `ExecutionReceipt`
-   - `RunConfig`
-   - `RunTrace`
-3. Define the five adapter interfaces from `PROJECT_CHARTER.md`.
-4. Implement an adapter registry selected by IDs from `RunConfig`.
-5. Implement exactly these demo adapters:
-   - cached SOL/USD market-data source
-   - unpaid local MSOS analysis stub
-   - deterministic MSOS threshold strategy
-   - no-op payment adapter for the unpaid slice
-   - paper execution venue
-6. Implement an orchestrator that:
-   - validates configuration
-   - resolves adapters
-   - fetches evidence
-   - invokes analysis
-   - evaluates the strategy
-   - records a paper result
-   - returns a complete run trace
-7. Add one CLI or API entry point that runs the frozen demo configuration.
-8. Add automated tests for configuration validation, adapter resolution, schema validation, all three strategy outcomes, paper execution, and the complete unpaid vertical slice.
-9. Add a short README with exact local run and test commands.
-
-## Mandatory constraints
-
-- `/core` must not import code from `/adapters`, `/api`, `/agent`, or `/web`.
-- Do not add Monad, x402, wallet, blockchain, LLM, exchange, or real trading dependencies.
-- Do not implement multiple providers, assets, markets, or strategies.
-- Do not add visual polish.
-- Do not alter the charter to fit the implementation.
-- Use fixtures and deterministic behaviour rather than pretending the initial signal is commercially predictive.
-
-## Completion evidence
-
-Before marking this task complete, record:
-
-- exact commands run
-- test and lint results
-- example run output
-- files changed
-- known limitations
+1. Create a TypeScript project with linting, tests, and type checking.
+2. Implement the generic `Program`, `Tool`, `ToolRegistry`, `ExecutionContext`, and `ExecutionEvent` interfaces.
+3. Implement an `AgentRuntime` that loads one trusted program and records a structured execution trace.
+4. Implement a cached market-data tool.
+5. Implement a deterministic local MSOS signal stub matching the charter schema.
+6. Implement a paper-trading tool.
+7. Implement the `msos-margin-demo` program without Monad payment yet.
+8. Implement a trivial `price-report-smoke-test` program proving the runtime is not hard-coded.
+9. Add tests for both programs and the safety-margin decision.
 
 ## Stop condition
 
-Stop after the unpaid programmable vertical slice passes its tests. Payment integration is a separate next task and must not begin implicitly.
+Stop when the unpaid vertical slice passes tests and demonstrates:
+
+```text
+load program
+→ call registered tools
+→ apply margin rule
+→ record paper action
+→ emit execution trace
+```
+
+## Explicit exclusions from this task
+
+Do not implement:
+
+- Monad integration
+- x402 or MPP
+- Wallet handling
+- Real market-data integration
+- Real trading
+- LLM planning
+- Dynamic tool discovery
+- Arbitrary program execution
+- Visual polish
+- Deployment
+
+## Evidence required before the next task
+
+- Test command and passing output
+- Type-check command and passing output
+- Example execution trace from both programs
+- File list showing the runtime core contains no demo-specific imports
+- Summary of any deviations from the charter
+
+## Next task after acceptance
+
+Add the Monad payment tool and place the MSOS signal behind a real payment requirement without changing the runtime core.
