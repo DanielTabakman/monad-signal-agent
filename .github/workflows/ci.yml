@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate code and browser assets
+        run: npm run demo:web:accept
+
+      - name: Smoke-test compiled public server
+        env:
+          NODE_ENV: production
+          HOST: 0.0.0.0
+          PORT: 4173
+          PUBLIC_LIVE_RUNS_ENABLED: "false"
+        run: |
+          npm start > /tmp/monad-signal-agent.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:4173/api/health > /tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat /tmp/health.json
+          grep '"ok":true' /tmp/health.json
+          grep '"deployment":"public"' /tmp/health.json
+          grep '"liveRunsEnabled":false' /tmp/health.json
+          curl --fail --silent http://127.0.0.1:4173/ > /tmp/index.html
+          grep 'Monad Signal Agent' /tmp/index.html
