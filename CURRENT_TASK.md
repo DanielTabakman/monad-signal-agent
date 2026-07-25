@@ -2,194 +2,149 @@
 
 ## Status
 
-**COMPLETE - Monad-paid signal loop passes.**
+**IMPLEMENTED - live Monad x402 path is coded, but the real paid testnet run is blocked by missing live environment variables in this shell.**
 
 ## Objective
 
-Implement the smallest paid-signal vertical slice on branch `feat/monad-paid-signal`.
+Work on PR #3 and replace the simulated Monad payment implementation with a real Monad x402 v2 testnet integration while keeping the existing agent runtime, budget logic, signal validation, margin decision, execution events, paper-trading tool, and tests.
 
-Note: GitHub PR #2 was still open when this work began. Remote `main` was at `8a1792b`, and PR #2 head was `a0ffe48`. This branch was created from `main` and fast-forwarded to the PR #2 head so the paid slice could start from the unpaid vertical slice the task depends on.
+## Official Monad x402 Configuration
+
+Implementation authority: https://docs.monad.xyz/guides/x402
+
+- Network: `eip155:10143`
+- x402 protocol version: `2`
+- Scheme: `exact`
+- Payment asset: Monad Testnet USDC, `0x534b2f3A21130d7a60830c2Df862319e593943A3`
+- Facilitator: `https://x402-facilitator.molandak.org`
+- Demo quote: `1000` atomic USDC units, equal to `0.001 USDC`
 
 ## Implemented
 
-1. Added a local payment-gated MSOS HTTP endpoint at `POST /msos/signal`.
-2. Unpaid requests return HTTP 402 with the expected payment requirement.
-3. Added a Monad test-reference payment tool that returns a deterministic, verifiable payment reference and transaction hash.
-4. Updated the MSOS margin demo program to:
-   - request the signal unpaid,
-   - encounter the payment requirement,
-   - compare quoted cost with `maxSignalCostAtomic`,
-   - pay only when within budget,
-   - retry the signal request with the payment reference,
-   - validate the paid signal schema,
-   - apply the existing safety-margin rule,
+1. Replaced the deterministic Monad test-reference implementation with x402 v2 payment requirements.
+2. Added real EVM exact-payment signing with `@x402/core`, `@x402/evm`, and `viem`.
+3. Added facilitator-backed verification and settlement on the MSOS endpoint.
+4. Kept the agent flow intact:
+   - request MSOS signal without payment,
+   - receive HTTP 402 payment requirement,
+   - compare quote against `maxSignalCostAtomic`,
+   - sign approved payment authorization,
+   - retry paid request,
+   - store facilitator verification and settlement results,
+   - validate the signal,
+   - apply the safety-margin rule,
    - record the paper action.
-5. Added execution events for:
-   - `payment_required`
-   - `payment_approved`
-   - `payment_rejected`
-   - `payment_submitted`
-   - `payment_verified`
-   - `signal_validation`
-6. Added tests for:
-   - unpaid HTTP payment requirement,
-   - paid happy path,
-   - over-budget stop before payment,
-   - malformed-signal stop before paper execution,
-   - second smoke-test program,
-   - unregistered-tool safe failure,
-   - safety-margin rule.
+5. Added an explicit `mock` payment mode for unit tests and local demo only.
+6. Added `npm run demo:monad` as the opt-in live integration command.
+7. Added `.env.example` with placeholder-only live configuration names.
 
-## Commands run
+## Removed Misleading Simulation
 
-- `git fetch origin main`
-- `gh pr view 2 --repo DanielTabakman/monad-signal-agent --json number,state,baseRefName,headRefName,mergeCommit,headRefOid,url,title`
-- `git switch main`
-- `git pull --ff-only origin main`
-- `git switch -c feat/monad-paid-signal`
-- `git merge --no-edit origin/feat/unpaid-vertical-slice`
-- `npm run typecheck`
-- `npm run lint`
-- `npm test`
-- `npm run build`
-- `npm run demo`
-- `npm run demo`
-- `npm run demo`
-- `rg "\.\./(tools|programs)|SOL|MSOS|Monad|market-data|paper-trading|msos|monad" src/core`
+Removed from source code:
 
-## Results
+- the old hackathon test-reference protocol label
+- the old deterministic local verification label
+- locally fabricated transaction-hash-shaped receipts
+- fabricated Monad explorer URLs
+- verification based only on string shape
+
+Mock mode remains only as `mode: "mock"` and states that it is not verified on Monad. It emits `mock-settlement-not-onchain`, not a Monad explorer URL and not a 64-byte transaction hash.
+
+## Unit-Test Mock Evidence
+
+Command:
 
 ```text
-> npm run typecheck
-> tsc --noEmit
+npm test
+```
 
-passed
+Result:
 
-> npm run lint
-> eslint .
-
-passed
-
-> npm test
-> vitest run
-
+```text
 Test Files  1 passed (1)
-Tests       8 passed (8)
-
-> npm run build
-> tsc
-
-passed
-
-> npm run demo
-> tsx src/demo/run.ts
-
-passed three consecutive times
+Tests       10 passed (10)
 ```
 
-The `/core` boundary scan returned no matches for tool/program imports or demo-specific terms.
+Covered mock facilitator cases:
 
-## Example trace summary
+- payment required
+- budget rejection
+- verification rejection
+- settlement rejection
+- malformed signal
+- successful paid retry
 
-```json
-{
-  "marginDemo": {
-    "programId": "msos-margin-demo",
-    "ok": true,
-    "result": {
-      "market": "crypto",
-      "asset": "SOL",
-      "safetyMargin": 0.05,
-      "estimatedEdge": 0.08,
-      "action": "BUY",
-      "paperTradeId": "paper-1",
-      "paymentReference": "monad-test-ref_17579a2bb38359c36d176131ae856f15",
-      "transactionHash": "0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
-      "verificationUrl": "https://testnet.monad.xyz/tx/0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9"
-    },
-    "traceTypes": [
-      "program_started",
-      "tool_call_started:market-data",
-      "tool_call_succeeded:market-data",
-      "tool_call_started:msos-signal",
-      "tool_call_succeeded:msos-signal",
-      "payment_required:msos-signal",
-      "payment_approved:monad-payment",
-      "tool_call_started:monad-payment",
-      "tool_call_succeeded:monad-payment",
-      "payment_submitted:monad-payment",
-      "tool_call_started:msos-signal",
-      "tool_call_succeeded:msos-signal",
-      "payment_verified:msos-signal",
-      "signal_validation:msos-signal:true",
-      "decision:safety-margin-comparison",
-      "tool_call_started:paper-trading",
-      "tool_call_succeeded:paper-trading",
-      "program_completed"
-    ]
-  },
-  "priceReport": {
-    "programId": "price-report-smoke-test",
-    "ok": true,
-    "result": {
-      "market": "crypto",
-      "asset": "SOL",
-      "price": 182.42,
-      "currency": "USD",
-      "source": "cached"
-    }
-  }
-}
+The local mock demo also passed:
+
+```text
+npm run demo
 ```
 
-## Payment requirement evidence
+Important mock evidence fields:
 
-Unpaid `POST /msos/signal` returns HTTP 402:
+- `paymentMode: "mock"`
+- `quotedAmountAtomic: "1000"`
+- `settlement.transaction: "mock-settlement-not-onchain"`
+- mock verification note: `not verified on Monad`
+- mock settlement note: `no Monad transaction was sent`
 
-```json
-{
-  "status": "payment_required",
-  "paymentRequirement": {
-    "id": "msos-sol-signal-2026-07-25",
-    "network": "monad-testnet",
-    "protocol": "monad-hackathon-test-reference",
-    "amountAtomic": "10000000000000000",
-    "currency": "MON",
-    "recipient": "0x0000000000000000000000000000000000000abc",
-    "memo": "MSOS SOL signal access",
-    "expiresAt": "2026-07-25T23:59:59.000Z",
-    "verificationMethod": "deterministic-local-testnet-reference"
-  }
-}
+## Live Monad Testnet Evidence
+
+Command attempted:
+
+```text
+npm run demo:monad
 ```
 
-## Verification evidence
+Current result:
 
-The Monad payment tool returns a deterministic test-reference receipt:
-
-```json
-{
-  "paymentReference": "monad-test-ref_17579a2bb38359c36d176131ae856f15",
-  "network": "monad-testnet",
-  "protocol": "monad-hackathon-test-reference",
-  "amountAtomic": "10000000000000000",
-  "currency": "MON",
-  "transactionHash": "0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
-  "verificationUrl": "https://testnet.monad.xyz/tx/0x17579a2bb38359c36d176131ae856f15657d3b8f33122065e91089c8989b90b9",
-  "submittedAt": "2026-07-25T00:03:00.000Z"
-}
+```text
+Error: Missing required live Monad x402 environment variables: MONAD_PAYER_PRIVATE_KEY, MONAD_PAY_TO_ADDRESS, MONAD_FACILITATOR_URL, MONAD_NETWORK, MONAD_TESTNET_USDC_ADDRESS, MONAD_RPC_URL, MONAD_MAX_SIGNAL_COST_ATOMIC
 ```
 
-The MSOS endpoint verifies that reference before returning the paid signal and emits `payment_verified` in the runtime trace.
+No live Monad payment was run in this shell because the required signer, pay-to address, facilitator, network, USDC, RPC, and budget environment variables were absent.
 
-## Files changed
+Live evidence still required after configuration:
 
+- payer address
+- pay-to address
+- quoted USDC amount
+- facilitator verification response
+- facilitator settlement response
+- genuine settlement transaction hash
+- independent Monad RPC or recognized explorer verification
+- complete agent execution trace
+
+The live command independently verifies the returned settlement transaction hash through `MONAD_RPC_URL` using `eth_getTransactionReceipt` via viem. It rejects non-hash settlement values before RPC verification.
+
+## Commands Run
+
+```text
+npm run typecheck
+npm test
+npm run lint
+npm run build
+npm run demo
+npm run demo:monad
+```
+
+Results:
+
+- `npm run typecheck`: passed
+- `npm test`: passed, 10 tests
+- `npm run lint`: passed
+- `npm run build`: passed
+- `npm run demo`: passed with explicit mock evidence
+- `npm run demo:monad`: failed clearly at the missing-env gate
+
+## Files Changed
+
+- `.env.example`
 - `CURRENT_TASK.md`
-- `src/core/agent-runtime.ts`
-- `src/core/execution-context.ts`
-- `src/core/execution-events.ts`
+- `package-lock.json`
+- `package.json`
 - `src/demo/run.ts`
-- `src/programs/index.ts`
+- `src/demo/run-monad-live.ts`
 - `src/programs/msos-margin-demo.ts`
 - `src/test/runtime.test.ts`
 - `src/tools/index.ts`
@@ -197,15 +152,6 @@ The MSOS endpoint verifies that reference before returning the paid signal and e
 - `src/tools/msos-signal/paid-msos-signal-endpoint.ts`
 - `src/tools/msos-signal/paid-msos-signal-tool.ts`
 
-## Known limitations
+## Stop Condition
 
-- No real trading is implemented; paper trading remains in-memory only.
-- No real funds are used. The payment tool uses a deterministic Monad testnet-style verification reference because no official hackathon environment requiring real funds was configured in this repository.
-- The MSOS HTTP endpoint is a local demo endpoint, not a deployed service.
-- The payment protocol is intentionally limited to the single Monad test-reference path needed for this vertical slice.
-- Market data remains cached-only.
-- The branch includes the unpaid PR #2 head because PR #2 had not actually been merged into remote `main` at implementation time.
-
-## Stop condition
-
-Stop here. The Monad-paid signal loop passes; do not begin interface or presentation work automatically.
+Stop after the real paid-signal flow succeeds. Do not start UI work, live market-data work, additional strategies, real trading, or presentation polish.

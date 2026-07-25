@@ -3,18 +3,24 @@ export type { MarketDataRequest, MarketSnapshot } from "./market-data/cached-mar
 export { createMonadPaymentTool } from "./monad-payment/monad-payment-tool.js";
 export type { MonadPaymentReceipt, MonadPaymentRequest } from "./monad-payment/monad-payment-tool.js";
 export {
+  MONAD_FACILITATOR_URL,
+  MONAD_USDC_TESTNET_ADDRESS,
+  MONAD_X402_NETWORK,
+  MSOS_SIGNAL_AMOUNT_ATOMIC,
+  MSOS_SIGNAL_AMOUNT_USDC,
   getMsosPaymentRequirement,
-  startPaidMsosSignalEndpoint,
-  verifyMonadPaymentReference
+  startPaidMsosSignalEndpoint
 } from "./msos-signal/paid-msos-signal-endpoint.js";
 export type {
   MonadPaymentReference,
+  MonadX402Facilitator,
+  MonadX402PaymentRequirement,
   PaidMsosSignalEndpoint,
   PaidMsosSignalOk,
   PaidMsosSignalPaymentRequired,
   PaidMsosSignalRequest,
   PaidMsosSignalResponse,
-  PaymentRequirement
+  MonadX402PaymentRequirement as PaymentRequirement
 } from "./msos-signal/paid-msos-signal-endpoint.js";
 export { createPaidMsosSignalTool } from "./msos-signal/paid-msos-signal-tool.js";
 export type { PaidMsosSignalToolConfig } from "./msos-signal/paid-msos-signal-tool.js";

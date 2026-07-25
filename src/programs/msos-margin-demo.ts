@@ -19,9 +19,13 @@ export interface MsosMarginDemoResult extends JsonObject {
   estimatedEdge: number;
   action: SignalDecision;
   paperTradeId: string;
-  paymentReference: string;
+  paymentMode: "live" | "mock";
+  payer: string;
+  payTo: string;
+  quotedAmountAtomic: string;
+  verification: JsonObject;
+  settlement: JsonObject;
   transactionHash: string;
-  verificationUrl: string;
 }
 
 export const msosMarginDemoProgram: Program<MsosMarginDemoConfig, MsosMarginDemoResult> = {
@@ -44,6 +48,7 @@ export const msosMarginDemoProgram: Program<MsosMarginDemoConfig, MsosMarginDemo
     }
 
     const paymentRequirement = unpaidSignalResponse.paymentRequirement;
+    const quotedPayment = getQuotedPayment(paymentRequirement);
     context.recordEvent({
       type: "payment_required",
       toolName: "msos-signal",
@@ -55,7 +60,7 @@ export const msosMarginDemoProgram: Program<MsosMarginDemoConfig, MsosMarginDemo
         type: "payment_rejected",
         toolName: "monad-payment",
         details: {
-          quotedCostAtomic: paymentRequirement.amountAtomic,
+          quotedCostAtomic: quotedPayment.amount,
           maxSignalCostAtomic: config.maxSignalCostAtomic,
           reason: "quoted signal cost exceeds configured maximum budget"
         }
@@ -67,9 +72,10 @@ export const msosMarginDemoProgram: Program<MsosMarginDemoConfig, MsosMarginDemo
       type: "payment_approved",
       toolName: "monad-payment",
       details: {
-        quotedCostAtomic: paymentRequirement.amountAtomic,
+        quotedCostAtomic: quotedPayment.amount,
         maxSignalCostAtomic: config.maxSignalCostAtomic,
-        requirementId: paymentRequirement.id
+        network: quotedPayment.network,
+        scheme: quotedPayment.scheme
       }
     });
 
@@ -140,9 +146,13 @@ export const msosMarginDemoProgram: Program<MsosMarginDemoConfig, MsosMarginDemo
       estimatedEdge: signal.estimatedEdge,
       action,
       paperTradeId: paperTrade.id,
-      paymentReference: paymentReceipt.paymentReference,
-      transactionHash: paymentReceipt.transactionHash,
-      verificationUrl: paymentReceipt.verificationUrl
+      paymentMode: paidSignalResponse.payment.mode,
+      payer: paidSignalResponse.payment.payer,
+      payTo: paidSignalResponse.payment.accepted.payTo,
+      quotedAmountAtomic: quotedPayment.amount,
+      verification: paidSignalResponse.payment.verification,
+      settlement: paidSignalResponse.payment.settlement,
+      transactionHash: paidSignalResponse.payment.transactionHash
     };
   }
 };
@@ -196,7 +206,16 @@ export function validateMsosSignal(
 }
 
 function isWithinBudget(requirement: PaymentRequirement, maxSignalCostAtomic: string): boolean {
-  return BigInt(requirement.amountAtomic) <= BigInt(maxSignalCostAtomic);
+  return BigInt(getQuotedPayment(requirement).amount) <= BigInt(maxSignalCostAtomic);
+}
+
+function getQuotedPayment(requirement: PaymentRequirement): PaymentRequirement["accepts"][number] {
+  const quotedPayment = requirement.accepts[0];
+  if (!quotedPayment) {
+    throw new Error("MSOS signal payment requirement did not include an accepted payment option");
+  }
+
+  return quotedPayment;
 }
 
 function isSignalDecision(value: JsonValue): value is SignalDecision {

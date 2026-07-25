@@ -7,13 +7,14 @@ import {
   createPaidMsosSignalTool,
   createPaperTradingTool,
   getMsosPaymentRequirement,
+  MSOS_SIGNAL_AMOUNT_ATOMIC,
   startPaidMsosSignalEndpoint
 } from "../tools/index.js";
-import type { MsosSignal, PaidMsosSignalEndpoint } from "../tools/index.js";
+import type { MonadX402Facilitator, MsosSignal, PaidMsosSignalEndpoint } from "../tools/index.js";
 
 describe("paid MSOS vertical slice", () => {
   it("returns the expected payment requirement for an unpaid HTTP request", async () => {
-    const endpoint = await startPaidMsosSignalEndpoint();
+    const endpoint = await startPaidMsosSignalEndpoint({ facilitator: createMockFacilitator() });
 
     try {
       const response = await fetch(`${endpoint.url}/msos/signal`, {
@@ -29,10 +30,9 @@ describe("paid MSOS vertical slice", () => {
       const body = await response.json();
 
       expect(response.status).toBe(402);
-      expect(body).toEqual({
-        status: "payment_required",
-        paymentRequirement: getMsosPaymentRequirement()
-      });
+      expect(body.status).toBe("payment_required");
+      expect(body.paymentRequirement).toMatchObject(getMsosPaymentRequirement(`${endpoint.url}/msos/signal`));
+      expect(response.headers.get("payment-required")).toBeTruthy();
     } finally {
       await endpoint.close();
     }
@@ -52,8 +52,9 @@ describe("paid MSOS vertical slice", () => {
 
       expect(result.ok).toBe(true);
       expect(result.result?.action).toBe("BUY");
-      expect(result.result?.paymentReference).toMatch(/^monad-test-ref_/);
-      expect(result.result?.transactionHash).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(result.result?.paymentMode).toBe("mock");
+      expect(result.result?.quotedAmountAtomic).toBe(MSOS_SIGNAL_AMOUNT_ATOMIC);
+      expect(result.result?.transactionHash).toBe("mock-settlement-not-onchain");
       expect(paperTrading.records).toHaveLength(1);
       expect(result.trace.map((event) => event.type)).toEqual([
         "program_started",
@@ -75,6 +76,54 @@ describe("paid MSOS vertical slice", () => {
         "tool_call_succeeded",
         "program_completed"
       ]);
+    } finally {
+      await endpoint.close();
+    }
+  });
+
+  it("stops when facilitator verification rejects the payment", async () => {
+    const { runtime, paperTrading, endpoint } = await createRuntime({
+      facilitator: createMockFacilitator({ verifyValid: false })
+    });
+
+    try {
+      const result = await runtime.run(msosMarginDemoProgram, {
+        market: "crypto",
+        asset: "SOL",
+        safetyMargin: 0.05,
+        maxSignalCostAtomic: "1000",
+        payer: "0x000000000000000000000000000000000000dEaD"
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("MSOS signal payment was not accepted by the endpoint");
+      expect(result.trace.some((event) => event.type === "payment_submitted")).toBe(true);
+      expect(result.trace.some((event) => event.type === "payment_verified")).toBe(false);
+      expect(paperTrading.records).toHaveLength(0);
+    } finally {
+      await endpoint.close();
+    }
+  });
+
+  it("stops when facilitator settlement rejects the payment", async () => {
+    const { runtime, paperTrading, endpoint } = await createRuntime({
+      facilitator: createMockFacilitator({ settleSuccess: false })
+    });
+
+    try {
+      const result = await runtime.run(msosMarginDemoProgram, {
+        market: "crypto",
+        asset: "SOL",
+        safetyMargin: 0.05,
+        maxSignalCostAtomic: "1000",
+        payer: "0x000000000000000000000000000000000000dEaD"
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("MSOS signal payment was not accepted by the endpoint");
+      expect(result.trace.some((event) => event.type === "payment_submitted")).toBe(true);
+      expect(result.trace.some((event) => event.type === "payment_verified")).toBe(false);
+      expect(paperTrading.records).toHaveLength(0);
     } finally {
       await endpoint.close();
     }
@@ -190,16 +239,19 @@ describe("safety margin decision", () => {
   });
 });
 
-async function createRuntime(options: { malformedSignal?: boolean } = {}): Promise<{
+async function createRuntime(options: { malformedSignal?: boolean; facilitator?: MonadX402Facilitator } = {}): Promise<{
   runtime: AgentRuntime;
   paperTrading: ReturnType<typeof createPaperTradingTool>;
   endpoint: PaidMsosSignalEndpoint;
 }> {
-  const endpoint = await startPaidMsosSignalEndpoint(options);
+  const endpoint = await startPaidMsosSignalEndpoint({
+    malformedSignal: options.malformedSignal,
+    facilitator: options.facilitator ?? createMockFacilitator()
+  });
   const registry = new ToolRegistry();
   registry.register(createCachedMarketDataTool());
   registry.register(createPaidMsosSignalTool({ endpointUrl: endpoint.url }));
-  registry.register(createMonadPaymentTool());
+  registry.register(createMonadPaymentTool({ mode: "mock" }));
   const paperTrading = createPaperTradingTool();
   registry.register(paperTrading.tool);
 
@@ -207,5 +259,34 @@ async function createRuntime(options: { malformedSignal?: boolean } = {}): Promi
     runtime: new AgentRuntime(registry),
     paperTrading,
     endpoint
+  };
+}
+
+function createMockFacilitator(options: { verifyValid?: boolean; settleSuccess?: boolean } = {}): MonadX402Facilitator {
+  return {
+    async verify(paymentPayload) {
+      const payload = paymentPayload.payload as { mockAuthorization?: { payer?: string } };
+      return {
+        isValid: options.verifyValid ?? true,
+        invalidReason: options.verifyValid === false ? "mock_verification_rejected" : undefined,
+        payer: String(payload.mockAuthorization?.payer ?? "mock-payer"),
+        extra: {
+          mode: "mock",
+          note: "unit-test mock verification; not verified on Monad"
+        }
+      };
+    },
+    async settle() {
+      return {
+        success: options.settleSuccess ?? true,
+        errorReason: options.settleSuccess === false ? "mock_settlement_rejected" : undefined,
+        transaction: "mock-settlement-not-onchain",
+        network: "eip155:10143",
+        extra: {
+          mode: "mock",
+          note: "unit-test mock settlement; no Monad transaction was sent"
+        }
+      };
+    }
   };
 }

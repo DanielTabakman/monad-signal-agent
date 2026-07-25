@@ -32,7 +32,7 @@ export function createPaidMsosSignalTool(config: PaidMsosSignalToolConfig): Tool
       });
       const body = (await response.json()) as JsonObject;
 
-      if (response.status === 402 && body.status === "payment_required") {
+      if (response.status === 402) {
         return body as PaidMsosSignalResponse;
       }
 
@@ -48,14 +48,11 @@ export function createPaidMsosSignalTool(config: PaidMsosSignalToolConfig): Tool
 function isMonadPaymentReference(value: JsonValue): value is MonadPaymentReference {
   return (
     isRecord(value) &&
-    typeof value.paymentReference === "string" &&
-    typeof value.network === "string" &&
-    typeof value.protocol === "string" &&
-    typeof value.amountAtomic === "string" &&
-    typeof value.currency === "string" &&
-    typeof value.transactionHash === "string" &&
-    typeof value.verificationUrl === "string" &&
-    typeof value.submittedAt === "string"
+    (value.mode === "live" || value.mode === "mock") &&
+    typeof value.payer === "string" &&
+    isRecord(value.paymentPayload) &&
+    isRecord(value.accepted) &&
+    typeof value.createdAt === "string"
   );
 }
 
