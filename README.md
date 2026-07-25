@@ -14,6 +14,26 @@ The runtime loads one program that:
 
 The runtime itself is not tied to SOL, MSOS, a specific market, or a specific strategy. Those choices live in the loaded program and tool configuration.
 
+## Browser demo
+
+```powershell
+npm run demo:web
+```
+
+Then open `http://127.0.0.1:4173`.
+
+The browser demo includes:
+
+- a Monad-styled program builder
+- registered program-template selection
+- market, asset, safety-margin, and signal-budget controls
+- a generated trading-program editor for presentation and iteration
+- a real live Monad x402 run button
+- a clearly labelled verified-replay fallback
+- an animated execution pipeline, sanitized trace, and explorer transaction link
+
+The editor does not execute arbitrary pasted code. The dropdowns generate the bounded configuration that the registered runtime actually executes.
+
 ## Demo commands
 
 ```powershell
