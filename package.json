@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "demo": "tsx src/demo/run.ts",
+    "setup:monad-wallet": "tsx src/demo/setup-monad-wallet.ts",
     "demo:monad": "tsx src/demo/run-monad-live.ts"
   },
   "devDependencies": {
