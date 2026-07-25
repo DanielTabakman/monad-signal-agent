@@ -1,84 +1,88 @@
 # Monad Signal Agent — Acceptance Gate v1
 
-## Pass condition
+The hackathon project passes only when every required criterion below is demonstrated.
 
-The project passes only when one complete configured run succeeds from start to finish and the same path succeeds three consecutive times.
+## A. Runtime is genuinely programmable
 
-## Required capabilities
+- [ ] The runtime loads a program through a defined interface.
+- [ ] Market, asset, strategy, and tool sequence are not hard-coded in the runtime core.
+- [ ] A second trivial program can run without modifying the runtime.
+- [ ] Programs can access only registered tools and the provided execution context.
 
-### A. Programmable core
+## B. Demo program completes the full loop
 
-- [ ] A run configuration selects the market, asset, information source, analysis tool, strategy, payment rail, execution venue, and spending limit.
-- [ ] The orchestrator depends on interfaces rather than concrete adapters.
-- [ ] Core domain code does not import Monad, x402, wallet, vendor, or UI packages.
-- [ ] Unknown adapter IDs fail clearly before any payment or execution attempt.
+- [ ] The MSOS margin demo requests SOL market data.
+- [ ] Live data works, or the cached fallback is clearly identified and works.
+- [ ] The program requests the paid MSOS signal.
+- [ ] An unpaid request is rejected or returns the expected payment requirement.
+- [ ] Payment is completed or verified through Monad.
+- [ ] The paid signal is returned in the required schema.
+- [ ] The program compares `estimatedEdge` with the configured safety margin.
+- [ ] The program records a paper `BUY`, `SELL`, or `NO_TRADE` action.
 
-### B. Frozen demo adapters
+## C. Execution is observable
 
-- [ ] One information-source adapter returns normalized SOL/USD market data.
-- [ ] One MSOS analysis adapter returns a validated structured signal.
-- [ ] One deterministic MSOS threshold strategy returns `BUY`, `SELL`, or `NO_TRADE`.
-- [ ] One paper execution adapter records the resulting action.
-- [ ] One Monad/x402 payment adapter can satisfy the paid tool requirement.
+- [ ] The trace shows the loaded program.
+- [ ] The trace shows every tool call and its status.
+- [ ] The trace shows payment status and a transaction or verification reference.
+- [ ] The trace shows the signal and safety-margin comparison.
+- [ ] The trace shows the final paper-trade action.
+- [ ] Failures stop safely and produce a useful error event.
 
-### C. Payment flow
+## D. Architecture boundaries hold
 
-- [ ] An unpaid request to the protected MSOS endpoint receives a real payment-required response.
-- [ ] The agent reads the payment requirement.
-- [ ] The agent rejects a quote above its configured spending limit.
-- [ ] An approved payment is submitted and verified through the Monad demo flow.
-- [ ] The paid retry returns the analysis result.
-- [ ] The run trace includes a payment reference or transaction reference.
+- [ ] `/core` imports no SOL-, MSOS-, Monad-, strategy-, or UI-specific code.
+- [ ] The MSOS analytics logic can run without the payment adapter.
+- [ ] Real trading is impossible in the hackathon configuration.
+- [ ] Program and tool inputs are runtime validated.
 
-### D. Decision and paper trade
+## E. Reliability
 
-- [ ] The strategy input includes normalized market evidence and the purchased MSOS analysis.
-- [ ] The decision is deterministic for a fixed fixture.
-- [ ] The paper venue records the symbol, side, quantity, reference price, timestamp, and reason.
-- [ ] `NO_TRADE` is represented as an explicit valid outcome.
-- [ ] No real exchange order is submitted.
+- [ ] Unit tests cover the runtime, tool registry, margin rule, and paper-trade recorder.
+- [ ] The complete happy path succeeds three consecutive times.
+- [ ] The cached-data path succeeds once.
+- [ ] A backup demo recording exists.
 
-### E. Demonstration
+## Required demo narrative
 
-- [ ] The interface or CLI visibly shows: request, acquired data, quoted cost, payment status, purchased analysis, strategy decision, and paper execution result.
-- [ ] The happy path succeeds three consecutive times.
-- [ ] One over-budget run visibly stops before payment.
-- [ ] One invalid analysis response visibly fails validation before execution.
-- [ ] A backup recording of the successful demo exists.
-
-## Required automated tests
-
-- [ ] Run configuration validation
-- [ ] Adapter registry lookup and unknown-adapter failure
-- [ ] Spending-policy approval and rejection
-- [ ] MSOS signal schema validation
-- [ ] Strategy decision fixtures for `BUY`, `SELL`, and `NO_TRADE`
-- [ ] Paper execution receipt
-- [ ] Unpaid-to-paid API sequence using test doubles where necessary
-- [ ] End-to-end demo fixture without real funds
-
-## Scope protection
-
-The following do not improve acceptance status and must not be started before every required gate above passes:
-
-- a second asset
-- a second strategy
-- a second market-data provider
-- dynamic provider discovery
-- real-money trading
-- portfolio state
-- charts beyond the execution trace
-- LLM-generated strategy reasoning
-- production authentication
+```text
+Load program
+→ retrieve market data
+→ encounter paid intelligence
+→ pay through Monad
+→ receive signal
+→ apply safety margin
+→ paper trade or abstain
+→ show execution trace
+```
 
 ## Cut order
 
-If time is constrained, cut in this order:
+If time is constrained, remove features in this order:
 
-1. Natural-language commentary
-2. Live data in favour of a clearly labelled cached fixture
-3. Visual styling
-4. Additional configuration controls
-5. Any testnet trade or swap beyond the required payment
+1. LLM-generated commentary
+2. Visual polish
+3. Charts
+4. Live market data, using the cached fallback
+5. Additional UI controls
+6. The second program’s presentation layer
 
-Never cut the programmable interface boundary, paid tool flow, strategy decision, paper execution, or visible run trace.
+Never cut:
+
+- Generic program interface
+- Tool registry
+- Monad payment
+- Paid MSOS signal
+- Margin decision
+- Paper-trade result
+- Execution trace
+
+## Automatic failure conditions
+
+The demo does not pass if:
+
+- The runtime is actually a hard-coded SOL workflow.
+- Payment is merely mocked while presented as a real Monad payment.
+- A real trade can be placed.
+- The strategy is described as profitable without evidence.
+- The complete path requires manual intervention between each step.
