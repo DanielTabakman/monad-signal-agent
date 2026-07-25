@@ -57,6 +57,21 @@ npm start
 
 The server reads `PORT` automatically and binds to `0.0.0.0`, making it compatible with Railway and similar Node hosts.
 
+## Continuous integration
+
+Every pull request and push to `main` runs GitHub Actions to:
+
+- install from the lockfile
+- typecheck
+- lint
+- run the test suite
+- build the TypeScript server
+- validate the browser JavaScript
+- launch the compiled production server in public replay-only mode
+- verify `/api/health` and the rendered website
+
+The live Monad payment path is intentionally not exercised in CI because the disposable testnet key remains outside GitHub.
+
 ## Public-safety boundaries
 
 - Monad Testnet only
