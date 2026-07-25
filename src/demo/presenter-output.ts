@@ -13,7 +13,7 @@ export interface PresenterEvidence {
     status: string;
     explorerUrl: string;
   };
-  paperTradeRecords: Array<{
+  paperTradeRecords: ReadonlyArray<{
     referencePrice: number;
   }>;
 }
