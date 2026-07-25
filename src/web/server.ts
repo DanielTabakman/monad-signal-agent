@@ -9,41 +9,94 @@ import { priceReportSmokeTestProgram } from "../programs/index.js";
 import { createCachedMarketDataTool } from "../tools/index.js";
 import { generateProgramSource, parseWebRunRequest, type WebRunRequest } from "./web-program.js";
 
-const HOST = "127.0.0.1";
-const PORT = Number(process.env.PORT ?? 4173);
+const HOST = process.env.HOST ?? "0.0.0.0";
+const PORT = readPositiveInteger(process.env.PORT, 4173);
 const WEB_ROOT = join(process.cwd(), "web");
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const LIVE_RUNS_ENABLED = readBoolean(process.env.PUBLIC_LIVE_RUNS_ENABLED, !IS_PRODUCTION);
+const LIVE_RUNS_PER_IP = readPositiveInteger(process.env.LIVE_RUNS_PER_IP, 3);
+const LIVE_RUN_WINDOW_MS = readPositiveInteger(process.env.LIVE_RUN_WINDOW_MS, 30 * 60 * 1000);
+const GLOBAL_LIVE_RUN_LIMIT = readPositiveInteger(process.env.GLOBAL_LIVE_RUN_LIMIT, 50);
+const GLOBAL_LIVE_RUN_WINDOW_MS = readPositiveInteger(
+  process.env.GLOBAL_LIVE_RUN_WINDOW_MS,
+  24 * 60 * 60 * 1000
+);
+
+interface RateBucket {
+  count: number;
+  resetAt: number;
+}
+
+const liveRunBuckets = new Map<string, RateBucket>();
+let globalLiveRunBucket: RateBucket = {
+  count: 0,
+  resetAt: Date.now() + GLOBAL_LIVE_RUN_WINDOW_MS
+};
+let liveRunInFlight = false;
+
+class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly retryAfterSeconds?: number
+  ) {
+    super(message);
+  }
+}
 
 const server = createServer(async (request, response) => {
   try {
     await handleRequest(request, response);
   } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Unexpected demo server error";
-    sendJson(response, 500, { ok: false, error: message });
+    const retryAfter = error instanceof HttpError ? error.retryAfterSeconds : undefined;
+    sendJson(
+      response,
+      status,
+      { ok: false, error: message },
+      retryAfter === undefined ? undefined : { "Retry-After": String(retryAfter) }
+    );
   }
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`\nMonad Signal Agent UI running at http://${HOST}:${PORT}`);
-  console.log("Keep this terminal open while presenting. Press Ctrl+C to stop.\n");
+  const localAddress = HOST === "0.0.0.0" ? "127.0.0.1" : HOST;
+  console.log(`\nMonad Signal Agent UI running at http://${localAddress}:${PORT}`);
+  console.log(
+    IS_PRODUCTION
+      ? "Public deployment mode enabled."
+      : "Keep this terminal open while presenting. Press Ctrl+C to stop."
+  );
+  console.log(`Live paid runs: ${LIVE_RUNS_ENABLED ? "enabled" : "disabled"}\n`);
 });
 
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    server.close(() => process.exit(0));
+  });
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  const url = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
+  const url = new URL(request.url ?? "/", "http://localhost");
 
   if (request.method === "GET" && url.pathname === "/api/health") {
     await loadEnvLocal();
-    const walletConfigured = [
-      "MONAD_PAYER_PRIVATE_KEY",
-      "MONAD_PAY_TO_ADDRESS",
-      "MONAD_FACILITATOR_URL",
-      "MONAD_RPC_URL"
-    ].every((name) => Boolean(process.env[name]));
+    const walletConfigured = isWalletConfigured();
 
     sendJson(response, 200, {
       ok: true,
       network: "Monad Testnet",
       walletConfigured,
-      livePaymentAmount: "0.001 USDC"
+      liveRunsEnabled: LIVE_RUNS_ENABLED && walletConfigured,
+      livePaymentAmount: "0.001 USDC",
+      deployment: IS_PRODUCTION ? "public" : "local",
+      limits: {
+        perIp: LIVE_RUNS_PER_IP,
+        perIpWindowMinutes: Math.round(LIVE_RUN_WINDOW_MS / 60_000),
+        global: GLOBAL_LIVE_RUN_LIMIT,
+        globalWindowHours: Math.round(GLOBAL_LIVE_RUN_WINDOW_MS / 3_600_000)
+      }
     });
     return;
   }
@@ -52,7 +105,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const config = parseWebRunRequest(await readJsonBody(request));
     const result =
       config.programId === "msos-margin-demo"
-        ? await runPaidSignalProgram(config)
+        ? await runRateLimitedPaidSignalProgram(request, config)
         : await runPriceReportProgram(config);
 
     sendJson(response, 200, { ok: true, ...result });
@@ -84,7 +137,33 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return;
   }
 
-  sendJson(response, 404, { ok: false, error: "Route not found" });
+  throw new HttpError(404, "Route not found");
+}
+
+async function runRateLimitedPaidSignalProgram(request: IncomingMessage, config: WebRunRequest) {
+  if (!LIVE_RUNS_ENABLED) {
+    throw new HttpError(
+      403,
+      "Live Monad payments are disabled on this deployment. Use verified replay instead."
+    );
+  }
+
+  await loadEnvLocal();
+  if (!isWalletConfigured()) {
+    throw new HttpError(503, "The server testnet wallet is not configured. Use verified replay instead.");
+  }
+
+  if (liveRunInFlight) {
+    throw new HttpError(429, "Another live payment is currently settling. Try again shortly.", 5);
+  }
+
+  consumeLiveRunAllowance(clientIdentifier(request));
+  liveRunInFlight = true;
+  try {
+    return await runPaidSignalProgram(config);
+  } finally {
+    liveRunInFlight = false;
+  }
 }
 
 async function runPaidSignalProgram(config: WebRunRequest) {
@@ -135,6 +214,70 @@ async function runPriceReportProgram(config: WebRunRequest) {
   };
 }
 
+function consumeLiveRunAllowance(clientId: string): void {
+  const now = Date.now();
+  globalLiveRunBucket = refreshBucket(globalLiveRunBucket, now, GLOBAL_LIVE_RUN_WINDOW_MS);
+
+  if (globalLiveRunBucket.count >= GLOBAL_LIVE_RUN_LIMIT) {
+    throw rateLimitError("The public demo has reached its daily live-payment limit.", globalLiveRunBucket, now);
+  }
+
+  const existing = liveRunBuckets.get(clientId) ?? {
+    count: 0,
+    resetAt: now + LIVE_RUN_WINDOW_MS
+  };
+  const bucket = refreshBucket(existing, now, LIVE_RUN_WINDOW_MS);
+
+  if (bucket.count >= LIVE_RUNS_PER_IP) {
+    throw rateLimitError("This browser has reached the live-payment limit. Use verified replay for now.", bucket, now);
+  }
+
+  bucket.count += 1;
+  globalLiveRunBucket.count += 1;
+  liveRunBuckets.set(clientId, bucket);
+  pruneExpiredBuckets(now);
+}
+
+function refreshBucket(bucket: RateBucket, now: number, windowMs: number): RateBucket {
+  return now >= bucket.resetAt ? { count: 0, resetAt: now + windowMs } : bucket;
+}
+
+function rateLimitError(message: string, bucket: RateBucket, now: number): HttpError {
+  const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+  return new HttpError(429, message, retryAfterSeconds);
+}
+
+function pruneExpiredBuckets(now: number): void {
+  if (liveRunBuckets.size < 500) {
+    return;
+  }
+
+  for (const [key, bucket] of liveRunBuckets) {
+    if (now >= bucket.resetAt) {
+      liveRunBuckets.delete(key);
+    }
+  }
+}
+
+function clientIdentifier(request: IncomingMessage): string {
+  const forwarded = request.headers["x-forwarded-for"];
+  const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  const firstForwardedAddress = forwardedValue?.split(",")[0]?.trim();
+  return firstForwardedAddress || request.socket.remoteAddress || "unknown";
+}
+
+function isWalletConfigured(): boolean {
+  return [
+    "MONAD_PAYER_PRIVATE_KEY",
+    "MONAD_PAY_TO_ADDRESS",
+    "MONAD_FACILITATOR_URL",
+    "MONAD_NETWORK",
+    "MONAD_TESTNET_USDC_ADDRESS",
+    "MONAD_RPC_URL",
+    "MONAD_MAX_SIGNAL_COST_ATOMIC"
+  ].every((name) => Boolean(process.env[name]));
+}
+
 function buildReplayTrace(): Array<Record<string, unknown>> {
   return [
     { type: "program_started", programId: "msos-margin-demo" },
@@ -149,6 +292,11 @@ function buildReplayTrace(): Array<Record<string, unknown>> {
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const contentType = request.headers["content-type"] ?? "";
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    throw new HttpError(415, "Content-Type must be application/json");
+  }
+
   const chunks: Buffer[] = [];
   let totalBytes = 0;
 
@@ -156,20 +304,20 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     totalBytes += buffer.length;
     if (totalBytes > 64 * 1024) {
-      throw new Error("Request body exceeded 64 KB");
+      throw new HttpError(413, "Request body exceeded 64 KB");
     }
     chunks.push(buffer);
   }
 
   const text = Buffer.concat(chunks).toString("utf8");
   if (!text) {
-    throw new Error("Request body is required");
+    throw new HttpError(400, "Request body is required");
   }
 
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error("Request body must contain valid JSON");
+    throw new HttpError(400, "Request body must contain valid JSON");
   }
 }
 
@@ -183,14 +331,14 @@ async function serveStatic(pathname: string, response: ServerResponse): Promise<
   const fileName = staticFiles[pathname];
 
   if (!fileName) {
-    sendJson(response, 404, { ok: false, error: "Page not found" });
-    return;
+    throw new HttpError(404, "Page not found");
   }
 
   const content = await readFile(join(WEB_ROOT, fileName));
   response.writeHead(200, {
+    ...securityHeaders(),
     "Content-Type": contentType(fileName),
-    "Cache-Control": "no-store",
+    "Cache-Control": "public, max-age=300",
     "Content-Length": content.length
   });
   response.end(content);
@@ -209,12 +357,44 @@ function contentType(fileName: string): string {
   }
 }
 
-function sendJson(response: ServerResponse, status: number, value: unknown): void {
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  value: unknown,
+  extraHeaders?: Record<string, string>
+): void {
   const body = JSON.stringify(value);
   response.writeHead(status, {
+    ...securityHeaders(),
+    ...extraHeaders,
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Content-Length": Buffer.byteLength(body)
   });
   response.end(body);
+}
+
+function securityHeaders(): Record<string, string> {
+  return {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+  };
+}
+
+function readPositiveInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function readBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  return value.toLowerCase() === "true";
 }
