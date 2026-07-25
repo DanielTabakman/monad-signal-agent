@@ -1,58 +1,82 @@
 # Monad Signal Agent
 
-A programmable agent runtime that can load a trusted program, use registered tools, pay for services through Monad, and record a complete execution trace.
+A programmable financial-agent runtime that can load a trusted program, use registered tools, purchase intelligence through Monad x402, take a bounded paper action, and expose the complete execution trace.
 
-## Hackathon demo
+## Public hackathon website
 
-The runtime loads one program that:
+The repository includes a full browser application, not just a CLI trace. It is designed to be deployed as one Node.js service on Railway.
 
-1. Retrieves SOL market data.
-2. Purchases an MSOS signal through Monad.
-3. Checks whether the signal clears a configured safety margin.
-4. Records a paper trade or abstains.
-5. Displays the execution trace.
+The public interface lets a judge:
 
-The runtime itself is not tied to SOL, MSOS, a specific market, or a specific strategy. Those choices live in the loaded program and tool configuration.
+- choose a registered agent program
+- configure the market, asset, safety margin, and maximum signal budget
+- inspect the generated trading-program source
+- run a free price-report program through the generic runtime
+- run the real paid MSOS program through Monad x402
+- see the payment, signal validation, safety decision, paper action, execution trace, transaction hash, and explorer link
+- use a clearly labelled verified replay if a live testnet dependency is unavailable
 
-## Browser demo
+The script editor is deliberately bounded. The browser never executes arbitrary pasted code; the selected controls generate validated inputs for registered TypeScript program templates.
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the public Railway deployment and submission instructions.
+
+## Core demonstration
+
+The MSOS Margin Agent performs this workflow:
+
+```text
+Retrieve SOL market data
+→ request paid MSOS intelligence
+→ approve the price within a configured budget
+→ sign and settle an x402 payment through Monad
+→ validate the returned signal
+→ compare its estimated edge with a safety margin
+→ record a paper trade or abstain
+→ display the complete execution trace
+```
+
+The runtime itself is not tied to SOL, MSOS, a particular market, or a specific strategy. Those choices live in the loaded program and registered tools. The included Price Report program proves the runtime can load different behaviour without modifying the core.
+
+## Run locally
 
 ```powershell
+npm ci
+npm run demo:web:accept
 npm run demo:web
 ```
 
 Then open `http://127.0.0.1:4173`.
 
-The browser demo includes:
-
-- a Monad-styled program builder
-- registered program-template selection
-- market, asset, safety-margin, and signal-budget controls
-- a generated trading-program editor for presentation and iteration
-- a real live Monad x402 run button
-- a clearly labelled verified-replay fallback
-- an animated execution pipeline, sanitized trace, and explorer transaction link
-
-The editor does not execute arbitrary pasted code. The dropdowns generate the bounded configuration that the registered runtime actually executes.
-
-## Demo commands
+## Run the compiled production server
 
 ```powershell
-npm run demo:accept
+npm ci
+npm run build
+npm start
 ```
 
-Runs typecheck, lint, tests, build, the offline replay, and three consecutive live Monad Testnet proof runs. The live portion spends `0.003` test USDC total.
+The server reads `PORT` automatically and binds to `0.0.0.0`, making it compatible with Railway and similar Node hosts.
+
+## Public-safety boundaries
+
+- Monad Testnet only
+- test USDC only
+- paper trading only
+- registered program templates only
+- no arbitrary server-side code execution
+- server-side maximum payment budget
+- per-IP and global live-payment rate limits
+- one live settlement at a time
+- secrets remain server-side
+- live payments can be disabled instantly while replay remains available
+
+## CLI demo commands
 
 ```powershell
 npm run demo:present
 ```
 
-Runs the concise judge-facing live Monad Testnet demo.
-
-```powershell
-npm run demo:present:three
-```
-
-Runs the complete live path three consecutive times and writes sanitized evidence to `.demo-evidence/`.
+Runs one concise live Monad Testnet demonstration.
 
 ```powershell
 npm run demo:replay
@@ -66,14 +90,28 @@ npm run demo:monad
 
 Prints the full live JSON evidence and execution trace for technical inspection.
 
-See [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md) for the two-minute narrative, presenter cues, and fallback procedure.
+```powershell
+npm run demo:accept
+```
 
-## Control documents
+Runs typecheck, lint, tests, build, replay, and three consecutive live Monad Testnet proof runs. The live portion spends `0.003` test USDC total.
 
-- [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) — frozen mission, scope, architecture, and non-goals.
-- [`ACCEPTANCE_GATE.md`](ACCEPTANCE_GATE.md) — objective demo pass/fail criteria.
-- [`CURRENT_TASK.md`](CURRENT_TASK.md) — the only active implementation assignment.
+See [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md) for the two-minute presenter narrative.
+
+## Repository evidence
+
+- [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) — frozen mission, scope, architecture, and non-goals
+- [`ACCEPTANCE_GATE.md`](ACCEPTANCE_GATE.md) — objective demo pass/fail criteria
+- [`CURRENT_TASK.md`](CURRENT_TASK.md) — current implementation and evidence record
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — public hosting, secrets, safeguards, and submission checklist
+
+## Hackathon submission
+
+Submit both:
+
+- GitHub repository: `https://github.com/DanielTabakman/monad-signal-agent`
+- Public website: the generated Railway domain
 
 ## Scope rule
 
-Design the interfaces generically, but implement only one complete hackathon program.
+Design the interfaces generically, but implement only one complete paid hackathon program and one trivial replacement program.
